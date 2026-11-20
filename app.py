@@ -18,7 +18,7 @@ BOOK_REFRESH_SECONDS = 1.0       # How often demo order book updates and browser
 OI_REFRESH_SECONDS = 60          # How often option chain open interest refreshes (seconds; keeps API usage tiny)
 OI_RANGE_POINTS = 500            # Option chain strike window (+/- points around current NIFTY price)
 OI_STEP_POINTS = 50              # Option strike interval in points for NIFTY (BANKNIFTY auto-scales to 100)
-MAX_CANDLES = 60                 # Maximum 1-minute candles kept on screen (last 60 minutes)
+MAX_CANDLES = 375                # Maximum 1-minute candles kept in memory (full 6h15m NSE/BSE session)
 MAX_LADDER_ROWS = 45             # Maximum price ladder rows rendered at once so the book stays readable
 RECONNECT_DELAY_SECONDS = 10     # Seconds to wait before reconnecting Upstox WebSocket after a drop
 UPSTOX_DEPTH_MODE = "full"       # Upstox WebSocket mode: "full" (free 5 levels) or "full_d30" (30 levels, Plus Pack)
@@ -632,12 +632,11 @@ class MarketScreenEngine:
         now_bucket = (int(time.time()) // 60) * 60
         p = base - random.uniform(-12, 12) * step_scale
         candles = []
-        # Seed last 35 1-minute candles inside a tight, realistic intraday range
-        # so candles and the 20-level order book share one clean price scale right away.
-        for i in range(35, 0, -1):
+        # Seed last 120 1-minute candles (2 hours) so interactive chart zoom-out & pan have rich history
+        for i in range(120, 0, -1):
             t = now_bucket - i * 60
             o = round(p, 2)
-            delta = random.gauss(0, 1.8 * step_scale) + (base - p) * 0.14
+            delta = random.gauss(0, 1.8 * step_scale) + (base - p) * 0.06
             c = round(o + delta, 2)
             wick_up = abs(random.gauss(0, 1.1 * step_scale))
             wick_dn = abs(random.gauss(0, 1.1 * step_scale))

@@ -805,6 +805,37 @@
       font-size: 11.5px;
     }
 
+    .chart-tools {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .chart-tool-btn {
+      background: var(--bg-panel);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 4px;
+      padding: 1px 7px;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.4;
+      cursor: pointer;
+      user-select: none;
+    }
+    .chart-tool-btn:hover {
+      color: var(--text-primary);
+      border-color: var(--text-muted);
+    }
+    .chart-tool-btn.active {
+      color: #10b981;
+      border-color: rgba(16, 185, 129, 0.45);
+      background: rgba(16, 185, 129, 0.12);
+    }
+    canvas {
+      user-select: none;
+      touch-action: none;
+    }
+
     @media (max-width: 1080px) {
       body { overflow: auto; height: auto; }
       .workspace {
@@ -900,10 +931,14 @@
     <section class="panel">
       <div class="panel-header">
         <span>1-Minute Candles</span>
-        <span class="panel-sub" id="candleMeta">Mid-price OHLC · Same price scale</span>
+        <div class="chart-tools">
+          <button class="chart-tool-btn" onclick="zoomChart('ob', 1.25)" title="Zoom Out (Scroll Down)">−</button>
+          <button class="chart-tool-btn" onclick="zoomChart('ob', 0.8)" title="Zoom In (Scroll Up)">+</button>
+          <button class="chart-tool-btn active" id="btnObAuto" onclick="resetChart('ob')" title="Reset & Sync to Order Book (Double-click chart)">Auto</button>
+        </div>
       </div>
       <div class="sync-subheader">
-        <span id="ohlcHover">Hover candle for OHLC</span>
+        <span id="ohlcHover">Scroll = Zoom · Drag = Pan</span>
         <span id="scaleRangeLabel">Range: —</span>
       </div>
       <div class="sync-body">
@@ -1023,7 +1058,16 @@
     <section class="panel">
       <div class="panel-header">
         <span>1-Minute Price &amp; Resting Wall Zones</span>
-        <span class="panel-sub" id="boZoneMeta">Shaded bands = active ≥2× resting orders</span>
+        <div class="chart-tools">
+          <span class="panel-sub" style="margin-right:4px;">Scroll / Axis-Drag = Zoom · Drag = Pan</span>
+          <button class="chart-tool-btn" onclick="zoomChart('bo', 1.25)" title="Zoom Out">−</button>
+          <button class="chart-tool-btn" onclick="zoomChart('bo', 0.8)" title="Zoom In">+</button>
+          <button class="chart-tool-btn active" id="btnBoAuto" onclick="resetChart('bo')" title="Auto-fit live view (or Double-click chart)">Auto</button>
+        </div>
+      </div>
+      <div class="sync-subheader">
+        <span id="boOhlcHover">Hover candle for OHLC · Shaded bands = active ≥2× resting walls</span>
+        <span id="boRangeLabel">—</span>
       </div>
       <div class="sync-body">
         <canvas id="boZoneCanvas"></canvas>
@@ -1069,6 +1113,50 @@
     let lastBeepTime = 0;
     let hoverCandleIdx = -1;
     let centeredOiOnce = false;
+    let lastChartSymbol = "";
+
+    // Interactive TradingView / Broker-style chart viewports ("ob" = Order Book tab, "bo" = Big Orders tab)
+    const chartViews = {
+      ob: { defaultBars: 50, visibleBars: 50, panBars: 0, yZoom: 1.0, yPanPts: 0, hoverX: -1, hoverY: -1, dragging: false },
+      bo: { defaultBars: 75, visibleBars: 75, panBars: 0, yZoom: 1.0, yPanPts: 0, hoverX: -1, hoverY: -1, dragging: false },
+    };
+
+    function isChartAuto(key) {
+      const v = chartViews[key];
+      return Math.abs(v.visibleBars - v.defaultBars) < 0.5 && Math.abs(v.panBars) < 0.3 && Math.abs(v.yZoom - 1.0) < 0.03 && Math.abs(v.yPanPts) < 0.2;
+    }
+
+    function resetChart(key) {
+      const v = chartViews[key];
+      v.visibleBars = v.defaultBars;
+      v.panBars = 0;
+      v.yZoom = 1.0;
+      v.yPanPts = 0;
+      if (key === "ob") {
+        syncPriceScale = true;
+        const btn = document.getElementById("btnScaleSync");
+        if (btn) { btn.classList.add("active"); btn.textContent = "Synced"; }
+      }
+      if (latestState) renderAll(latestState);
+    }
+
+    function zoomChart(key, factor) {
+      const v = chartViews[key];
+      v.visibleBars = Math.max(12, Math.min(380, v.visibleBars * factor));
+      if (key === "bo" || !syncPriceScale) {
+        v.yZoom = Math.max(0.2, Math.min(8.0, v.yZoom * Math.pow(factor, 0.65)));
+      }
+      if (latestState) renderAll(latestState);
+    }
+
+    function chooseGridStep(span, pixelH) {
+      const raw = span / Math.max(4, pixelH / 38);
+      const nice = [1, 2, 5, 10, 15, 20, 25, 50, 100, 200, 250, 500, 1000];
+      for (const s of nice) {
+        if (s >= raw) return s;
+      }
+      return 1000;
+    }
 
     const fmtPrice = (n) => Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const fmtInt = (n) => Math.round(Number(n || 0)).toLocaleString("en-IN");
@@ -1091,7 +1179,13 @@
 
     async function setControl(payload) {
       try {
-        if (payload.symbol || payload.source) centeredOiOnce = false;
+        if (payload.symbol || payload.source) {
+          centeredOiOnce = false;
+          if (payload.symbol) {
+            resetChart("ob");
+            resetChart("bo");
+          }
+        }
         const res = await fetch("/api/control", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1309,6 +1403,12 @@
         depthBtn.style.display = "none";
       }
 
+      if (state.symbol && state.symbol !== lastChartSymbol) {
+        lastChartSymbol = state.symbol;
+        chartViews.ob.yPanPts = 0;
+        chartViews.bo.yPanPts = 0;
+      }
+
       // Update Big Orders tab count badge live even when viewing Order Book tab
       const boCount = ((state.big_orders && state.big_orders.items) || []).length;
       document.getElementById("btnTabBig").textContent = boCount > 0 ? `Big Orders (${boCount})` : "Big Orders";
@@ -1404,61 +1504,100 @@
       const H = rect.height;
       ctx.clearRect(0, 0, W, H);
 
+      const view = chartViews.ob;
+      const autoBtn = document.getElementById("btnObAuto");
+      if (autoBtn) autoBtn.classList.toggle("active", isChartAuto("ob") && syncPriceScale);
+
       const styles = getComputedStyle(document.documentElement);
       const borderCol = styles.getPropertyValue("--border-subtle").trim() || "#1f2b3e";
       const mutedCol = styles.getPropertyValue("--text-muted").trim() || "#64748b";
+      const panelAlt = styles.getPropertyValue("--bg-panel-alt").trim() || "#161f2e";
 
-      const candles = (state.candles || []).slice(-40);
-      document.getElementById("candleCountLabel").textContent = `${candles.length} × 1-min candles`;
+      const allCandles = state.candles || [];
+      document.getElementById("candleCountLabel").textContent = `${allCandles.length} × 1-min candles`;
+      if (!allCandles.length) return;
 
-      if (!candles.length) return;
+      const leftPad = 52;
+      const rightPad = 8;
+      const bottomPad = 18;
+      const plotW = Math.max(40, W - leftPad - rightPad);
+      const isLadderLocked = syncPriceScale && Math.abs(view.yZoom - 1.0) < 0.02 && Math.abs(view.yPanPts) < 0.2 && displayLadder.rows.length > 0;
+      const plotH = isLadderLocked ? H : Math.max(40, H - bottomPad);
+
+      const bars = Math.max(12, Math.min(380, view.visibleBars));
+      const maxPan = Math.max(0, allCandles.length - 5);
+      view.panBars = Math.max(-bars * 0.4, Math.min(maxPan, view.panBars));
+
+      const rightPadBars = view.panBars === 0 ? 2 : 0;
+      const rightEdgeBar = (allCandles.length - 1) + rightPadBars - view.panBars;
+      const leftEdgeBar = rightEdgeBar - bars;
+      const slotW = plotW / bars;
+
+      const visStart = Math.max(0, Math.floor(leftEdgeBar));
+      const visEnd = Math.min(allCandles.length - 1, Math.ceil(rightEdgeBar));
+      const visCandles = allCandles.slice(visStart, visEnd + 1);
 
       // Determine Y-axis price bounds
       let highP, lowP;
-      if (syncPriceScale && displayLadder.rows.length > 0) {
+      if (isLadderLocked) {
         highP = displayLadder.highEdge;
         lowP = displayLadder.lowEdge;
       } else {
-        highP = Math.max(...candles.map((c) => c.high));
-        lowP = Math.min(...candles.map((c) => c.low));
-        const pad = Math.max(2, (highP - lowP) * 0.08);
-        highP += pad;
-        lowP -= pad;
+        const pool = visCandles.length ? visCandles : allCandles.slice(-40);
+        const rawHi = Math.max(...pool.map((c) => c.high), state.mid_price + 10);
+        const rawLo = Math.min(...pool.map((c) => c.low), state.mid_price - 10);
+        const minSpan = state.symbol === "SENSEX" ? 300 : (state.symbol === "BANKNIFTY" ? 220 : 95);
+        const baseSpan = Math.max(minSpan, (rawHi - rawLo) * 1.18);
+        const spanNow = baseSpan * view.yZoom;
+        const center = ((rawHi + rawLo) / 2) + view.yPanPts;
+        highP = center + spanNow / 2;
+        lowP = center - spanNow / 2;
       }
 
-      document.getElementById("scaleRangeLabel").textContent =
-        `${lowP.toFixed(0)} – ${highP.toFixed(0)}`;
+      document.getElementById("scaleRangeLabel").textContent = `${lowP.toFixed(0)} – ${highP.toFixed(0)}`;
 
       const span = Math.max(0.5, highP - lowP);
-      const yOf = (p) => ((highP - p) / span) * H;
+      const yOf = (p) => ((highP - p) / span) * plotH;
 
-      // Horizontal price grid aligned with ladder rows
+      // Price strip subtle hover cue on left axis
+      if (view.hoverX >= 0 && view.hoverX <= leftPad) {
+        ctx.fillStyle = "rgba(148, 163, 184, 0.06)";
+        ctx.fillRect(0, 0, leftPad, plotH);
+      }
+
+      // Horizontal price grid
       ctx.strokeStyle = borderCol;
       ctx.lineWidth = 0.6;
       ctx.fillStyle = mutedCol;
       ctx.font = "10px -apple-system, BlinkMacSystemFont, sans-serif";
 
       const bsGrid = Number(state.band_size || 5);
-      const step = bsGrid >= 5 ? bsGrid : 5;
+      const step = isLadderLocked ? (bsGrid >= 5 ? bsGrid : 5) : chooseGridStep(span, plotH);
       const firstGrid = Math.ceil(lowP / step) * step;
       for (let gp = firstGrid; gp <= highP; gp += step) {
         const y = yOf(gp);
+        if (y < 0 || y > plotH) continue;
         ctx.beginPath();
         ctx.moveTo(0, y);
         ctx.lineTo(W, y);
         ctx.stroke();
-        ctx.fillText(gp.toLocaleString("en-IN"), 6, Math.max(10, y - 3));
+        ctx.fillText(gp.toLocaleString("en-IN"), 5, Math.max(10, y - 3));
       }
 
-      // Draw candles left-to-right leaving slight margin on left for price labels
-      const leftPad = 52;
-      const rightPad = 10;
-      const plotW = Math.max(40, W - leftPad - rightPad);
-      const slotW = plotW / Math.max(15, candles.length);
-      const bodyW = Math.max(3, Math.min(13, slotW * 0.66));
+      // Clip & draw candles
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(leftPad, 0, plotW, plotH);
+      ctx.clip();
 
-      candles.forEach((c, idx) => {
-        const cx = leftPad + idx * slotW + slotW * 0.5;
+      const bodyW = Math.max(2, Math.min(13, slotW * 0.66));
+      const labelEvery = Math.max(4, Math.round(bars / 6));
+
+      for (let i = visStart; i <= visEnd; i++) {
+        const c = allCandles[i];
+        const cx = leftPad + (i - leftEdgeBar + 0.5) * slotW;
+        if (cx < leftPad - slotW || cx > leftPad + plotW + slotW) continue;
+
         const yO = yOf(c.open);
         const yC = yOf(c.close);
         const yH = yOf(c.high);
@@ -1466,33 +1605,37 @@
         const isUp = c.close >= c.open;
         const col = isUp ? CANDLE_UP_COLOR : CANDLE_DOWN_COLOR;
 
-        // Wick
         ctx.strokeStyle = col;
-        ctx.lineWidth = 1.3;
+        ctx.lineWidth = 1.2;
         ctx.beginPath();
         ctx.moveTo(cx, yH);
         ctx.lineTo(cx, yL);
         ctx.stroke();
 
-        // Body
         const topY = Math.min(yO, yC);
-        const bh = Math.max(1.8, Math.abs(yC - yO));
+        const bh = Math.max(1.6, Math.abs(yC - yO));
         ctx.fillStyle = col;
         ctx.fillRect(cx - bodyW / 2, topY, bodyW, bh);
+      }
+      ctx.restore();
 
-        // Time stamp every ~10 candles at bottom
-        if (idx % 10 === 0 || idx === candles.length - 1) {
-          const d = new Date(c.time * 1000);
+      // Bottom timestamps
+      ctx.fillStyle = mutedCol;
+      ctx.font = "10px -apple-system, BlinkMacSystemFont, sans-serif";
+      for (let i = visStart; i <= visEnd; i++) {
+        if (i % labelEvery === 0 || i === allCandles.length - 1) {
+          const cx = leftPad + (i - leftEdgeBar + 0.5) * slotW;
+          if (cx < leftPad + 12 || cx > W - 22) continue;
+          const d = new Date(allCandles[i].time * 1000);
           const hh = String(d.getHours()).padStart(2, "0");
           const mm = String(d.getMinutes()).padStart(2, "0");
-          ctx.fillStyle = mutedCol;
-          ctx.fillText(`${hh}:${mm}`, Math.max(leftPad, cx - 14), H - 5);
+          ctx.fillText(`${hh}:${mm}`, cx - 14, H - 4);
         }
-      });
+      }
 
-      // Dashed mid-price line extending right into the Order Book's current price row!
+      // Dashed mid-price line
       const midY = yOf(state.mid_price);
-      if (midY >= 0 && midY <= H) {
+      if (midY >= 0 && midY <= plotH) {
         ctx.save();
         ctx.setLineDash([4, 4]);
         ctx.strokeStyle = MID_LINE_COLOR;
@@ -1504,10 +1647,33 @@
         ctx.restore();
       }
 
-      // Update OHLC caption for hovered or latest candle
-      const shown = (hoverCandleIdx >= 0 && hoverCandleIdx < candles.length)
-        ? candles[hoverCandleIdx]
-        : candles[candles.length - 1];
+      // Crosshair + hovered candle OHLC
+      let hoveredCandle = null;
+      if (view.hoverX > leftPad && view.hoverX < W - rightPad && view.hoverY >= 0 && view.hoverY <= plotH) {
+        const idx = Math.floor((view.hoverX - leftPad) / slotW + leftEdgeBar);
+        if (idx >= 0 && idx < allCandles.length) hoveredCandle = allCandles[idx];
+
+        ctx.save();
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = "rgba(148, 163, 184, 0.45)";
+        ctx.lineWidth = 0.9;
+        ctx.beginPath();
+        ctx.moveTo(view.hoverX, 0);
+        ctx.lineTo(view.hoverX, plotH);
+        ctx.moveTo(leftPad, view.hoverY);
+        ctx.lineTo(W, view.hoverY);
+        ctx.stroke();
+        ctx.restore();
+
+        const pAtMouse = highP - (view.hoverY / plotH) * span;
+        ctx.fillStyle = panelAlt;
+        ctx.fillRect(1, Math.max(0, view.hoverY - 8), leftPad - 3, 16);
+        ctx.fillStyle = "#e2e8f0";
+        ctx.font = "bold 9.5px -apple-system, BlinkMacSystemFont, sans-serif";
+        ctx.fillText(Math.round(pAtMouse).toLocaleString("en-IN"), 4, Math.max(11, view.hoverY + 3));
+      }
+
+      const shown = hoveredCandle || allCandles[allCandles.length - 1];
       if (shown) {
         const dt = new Date(shown.time * 1000);
         const tStr = `${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
@@ -1515,25 +1681,20 @@
           `${tStr}  O:${shown.open.toFixed(1)}  H:${shown.high.toFixed(1)}  L:${shown.low.toFixed(1)}  C:${shown.close.toFixed(1)}`;
       }
 
-      canvas._meta = { candles, leftPad, slotW };
+      canvas._geom = {
+        key: "ob",
+        plotLeft: leftPad,
+        plotRight: W - rightPad,
+        plotTop: 0,
+        plotBottom: plotH,
+        plotW,
+        plotH,
+        slotW,
+        span,
+        priceAxisSide: "left",
+        timeAxisTop: H - 22,
+      };
     }
-
-    // Interactive hover on candle canvas
-    document.getElementById("candleCanvas").addEventListener("mousemove", (ev) => {
-      const canvas = ev.currentTarget;
-      if (!canvas._meta || !latestState) return;
-      const r = canvas.getBoundingClientRect();
-      const x = ev.clientX - r.left;
-      const idx = Math.floor((x - canvas._meta.leftPad) / canvas._meta.slotW);
-      if (idx >= 0 && idx < canvas._meta.candles.length) {
-        hoverCandleIdx = idx;
-        drawCandles(latestState, computeDisplayLadder(latestState));
-      }
-    });
-    document.getElementById("candleCanvas").addEventListener("mouseleave", () => {
-      hoverCandleIdx = -1;
-      if (latestState) drawCandles(latestState, computeDisplayLadder(latestState));
-    });
 
     function renderOptionChain(state) {
       const oc = state.option_chain || {};
@@ -1724,116 +1885,447 @@
       const H = rect.height;
       ctx.clearRect(0, 0, W, H);
 
+      const view = chartViews.bo;
+      const autoBtn = document.getElementById("btnBoAuto");
+      if (autoBtn) autoBtn.classList.toggle("active", isChartAuto("bo"));
+
       const styles = getComputedStyle(document.documentElement);
       const borderCol = styles.getPropertyValue("--border-subtle").trim() || "#1f2b3e";
       const mutedCol = styles.getPropertyValue("--text-muted").trim() || "#64748b";
+      const panelAlt = styles.getPropertyValue("--bg-panel-alt").trim() || "#161f2e";
 
-      const candles = (state.candles || []).slice(-35);
+      const allCandles = state.candles || [];
       const items = ((state.big_orders && state.big_orders.items) || []);
       const mid = Number(state.mid_price || 25000);
 
-      let highP = mid + 20;
-      let lowP = mid - 20;
-      if (candles.length) {
-        const latestTs = candles[candles.length - 1].time;
-        const sessionCandles = candles.filter((c) => (latestTs - c.time) <= 3600);
-        const pool = sessionCandles.length ? sessionCandles : candles.slice(-15);
-        highP = Math.max(...pool.map((c) => c.high), mid + 10);
-        lowP = Math.min(...pool.map((c) => c.low), mid - 10);
+      // Broker layout: Plot on left/center, interactive Price Axis on RIGHT (58px), Time Axis at BOTTOM (22px)
+      const leftPad = 8;
+      const rightAxisW = 58;
+      const bottomAxisH = 22;
+      const plotRight = W - rightAxisW;
+      const plotW = Math.max(40, plotRight - leftPad);
+      const plotH = Math.max(40, H - bottomAxisH);
+
+      const bars = Math.max(12, Math.min(380, view.visibleBars));
+      const maxPan = Math.max(0, allCandles.length - 5);
+      view.panBars = Math.max(-bars * 0.5, Math.min(maxPan, view.panBars));
+
+      const rightPadBars = view.panBars === 0 ? 5 : 0;
+      const rightEdgeBar = Math.max(0, allCandles.length - 1) + rightPadBars - view.panBars;
+      const leftEdgeBar = rightEdgeBar - bars;
+      const slotW = plotW / bars;
+
+      const visStart = Math.max(0, Math.floor(leftEdgeBar));
+      const visEnd = Math.min(Math.max(0, allCandles.length - 1), Math.ceil(rightEdgeBar));
+      const visCandles = allCandles.slice(visStart, visEnd + 1);
+
+      // Balanced vertical scale (never over-zoomed by default; zoomable freely via wheel or right price-axis drag)
+      let rawHi = mid + 25;
+      let rawLo = mid - 25;
+      if (visCandles.length) {
+        const latestTs = visCandles[visCandles.length - 1].time;
+        const sessionPool = visCandles.filter((c) => (latestTs - c.time) <= 14400);
+        const pool = sessionPool.length ? sessionPool : visCandles;
+        rawHi = Math.max(...pool.map((c) => c.high), mid + 10);
+        rawLo = Math.min(...pool.map((c) => c.low), mid - 10);
       }
       for (const it of items) {
-        if (it.band_high > highP) highP = it.band_high;
-        if (it.band_low < lowP) lowP = it.band_low;
+        if (it.band_high > rawHi) rawHi = it.band_high;
+        if (it.band_low < rawLo) rawLo = it.band_low;
       }
-      const pad = Math.max(4, (highP - lowP) * 0.12);
-      highP += pad;
-      lowP -= pad;
 
-      const span = Math.max(1, highP - lowP);
-      const yOf = (p) => ((highP - p) / span) * H;
+      const minAutoSpan = state.symbol === "SENSEX" ? 360 : (state.symbol === "BANKNIFTY" ? 260 : 120);
+      const baseSpan = Math.max(minAutoSpan, (rawHi - rawLo) * 1.24);
+      const span = Math.max(8, baseSpan * view.yZoom);
+      const centerP = ((rawHi + rawLo) / 2) + view.yPanPts;
+      const highP = centerP + span / 2;
+      const lowP = centerP - span / 2;
 
-      // Grid lines
+      const rangeEl = document.getElementById("boRangeLabel");
+      if (rangeEl) {
+        rangeEl.textContent = `${Math.round(bars)} bars · ${Math.round(lowP).toLocaleString("en-IN")}–${Math.round(highP).toLocaleString("en-IN")}`;
+      }
+
+      const yOf = (p) => ((highP - p) / span) * plotH;
+
+      // Subtle interactive axis hover highlight (Right Price Axis & Bottom Time Axis)
+      if (view.hoverX >= plotRight) {
+        ctx.fillStyle = "rgba(148, 163, 184, 0.07)";
+        ctx.fillRect(plotRight, 0, rightAxisW, plotH);
+      }
+      if (view.hoverY >= plotH) {
+        ctx.fillStyle = "rgba(148, 163, 184, 0.07)";
+        ctx.fillRect(0, plotH, plotRight, bottomAxisH);
+      }
+
+      // Axis separator borders
+      ctx.strokeStyle = borderCol;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(plotRight, 0);
+      ctx.lineTo(plotRight, H);
+      ctx.moveTo(0, plotH);
+      ctx.lineTo(W, plotH);
+      ctx.stroke();
+
+      // Horizontal price grid + Right-side price scale labels (like Zerodha Kite / Upstox / TradingView)
+      const step = chooseGridStep(span, plotH);
+      const firstGrid = Math.ceil(lowP / step) * step;
       ctx.strokeStyle = borderCol;
       ctx.lineWidth = 0.6;
       ctx.fillStyle = mutedCol;
       ctx.font = "10px -apple-system, BlinkMacSystemFont, sans-serif";
-      const step = state.symbol === "SENSEX" ? 25 : (state.symbol === "BANKNIFTY" ? 15 : 5);
-      const firstGrid = Math.ceil(lowP / step) * step;
       for (let gp = firstGrid; gp <= highP; gp += step) {
         const y = yOf(gp);
+        if (y < 6 || y > plotH - 6) continue;
         ctx.beginPath();
         ctx.moveTo(0, y);
-        ctx.lineTo(W, y);
+        ctx.lineTo(plotRight, y);
         ctx.stroke();
-        ctx.fillText(gp.toLocaleString("en-IN"), 6, Math.max(10, y - 3));
+        ctx.fillText(gp.toLocaleString("en-IN"), plotRight + 6, y + 3);
       }
 
-      const leftPad = 52;
-      const rightPad = 12;
+      // Clip inside main plot area for Resting Wall Zones + Candles
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(leftPad, 0, plotW, plotH);
+      ctx.clip();
 
-      // 1. Draw shaded horizontal Resting Wall Zones first (behind candles)
+      // 1. Shaded Resting Wall Zones
       for (const it of items) {
         const yTop = yOf(it.band_high);
         const yBot = yOf(it.band_low);
-        const bandH = Math.max(4, yBot - yTop);
+        if (yBot < 0 || yTop > plotH) continue;
+        const bandH = Math.max(3, yBot - yTop);
         const isSell = it.side === "SELL";
 
-        ctx.fillStyle = isSell ? "rgba(239, 83, 80, 0.18)" : "rgba(45, 212, 191, 0.17)";
-        ctx.fillRect(leftPad, yTop, W - leftPad - rightPad, bandH);
+        ctx.fillStyle = isSell ? "rgba(239, 83, 80, 0.16)" : "rgba(45, 212, 191, 0.15)";
+        ctx.fillRect(leftPad, yTop, plotW, bandH);
 
         ctx.strokeStyle = isSell ? "rgba(239, 83, 80, 0.65)" : "rgba(45, 212, 191, 0.65)";
         ctx.lineWidth = 1;
-        ctx.strokeRect(leftPad, yTop, W - leftPad - rightPad, bandH);
+        ctx.strokeRect(leftPad, yTop, plotW, bandH);
 
         ctx.fillStyle = isSell ? "#f87171" : "#2dd4bf";
-        ctx.font = "bold 10.5px -apple-system, BlinkMacSystemFont, sans-serif";
+        ctx.font = "bold 10px -apple-system, BlinkMacSystemFont, sans-serif";
         const tagText = `${it.side} ${fmtInt(it.band_low)}–${fmtInt(it.band_high)} · ${fmtInt(it.lots)}L (${it.mult_label}) · ${it.resting_label}`;
-        ctx.fillText(tagText, leftPad + 6, Math.min(H - 4, yTop + Math.max(11, bandH * 0.68)));
+        const textY = bandH >= 14 ? (yTop + Math.min(bandH - 3, 12)) : Math.max(11, yTop - 3);
+        ctx.fillText(tagText, leftPad + 6, textY);
       }
 
-      // 2. Draw 1-minute candles
-      if (candles.length) {
-        const plotW = Math.max(40, W - leftPad - rightPad);
-        const slotW = plotW / Math.max(15, candles.length);
-        const bodyW = Math.max(3, Math.min(12, slotW * 0.65));
+      // 2. 1-Minute Candles
+      const bodyW = Math.max(2, Math.min(11, slotW * 0.64));
+      for (let i = visStart; i <= visEnd; i++) {
+        if (!allCandles.length) break;
+        const c = allCandles[i];
+        const cx = leftPad + (i - leftEdgeBar + 0.5) * slotW;
+        if (cx < leftPad - slotW || cx > plotRight + slotW) continue;
 
-        candles.forEach((c, idx) => {
-          const cx = leftPad + idx * slotW + slotW * 0.5;
-          const yO = yOf(c.open);
-          const yC = yOf(c.close);
-          const yH = yOf(c.high);
-          const yL = yOf(c.low);
-          const isUp = c.close >= c.open;
-          const col = isUp ? CANDLE_UP_COLOR : CANDLE_DOWN_COLOR;
+        const yO = yOf(c.open);
+        const yC = yOf(c.close);
+        const yH = yOf(c.high);
+        const yL = yOf(c.low);
+        const isUp = c.close >= c.open;
+        const col = isUp ? CANDLE_UP_COLOR : CANDLE_DOWN_COLOR;
 
-          ctx.strokeStyle = col;
-          ctx.lineWidth = 1.3;
-          ctx.beginPath();
-          ctx.moveTo(cx, yH);
-          ctx.lineTo(cx, yL);
-          ctx.stroke();
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(cx, yH);
+        ctx.lineTo(cx, yL);
+        ctx.stroke();
 
-          const topY = Math.min(yO, yC);
-          const bh = Math.max(1.8, Math.abs(yC - yO));
-          ctx.fillStyle = col;
-          ctx.fillRect(cx - bodyW / 2, topY, bodyW, bh);
-        });
+        const topY = Math.min(yO, yC);
+        const bh = Math.max(1.6, Math.abs(yC - yO));
+        ctx.fillStyle = col;
+        ctx.fillRect(cx - bodyW / 2, topY, bodyW, bh);
       }
 
       // 3. Dashed Mid-Price Line
       const midY = yOf(mid);
-      if (midY >= 0 && midY <= H) {
-        ctx.save();
+      if (midY >= 0 && midY <= plotH) {
         ctx.setLineDash([4, 4]);
         ctx.strokeStyle = MID_LINE_COLOR;
-        ctx.lineWidth = 1.2;
+        ctx.lineWidth = 1.15;
         ctx.beginPath();
-        ctx.moveTo(0, midY);
-        ctx.lineTo(W, midY);
+        ctx.moveTo(leftPad, midY);
+        ctx.lineTo(plotRight, midY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      ctx.restore();
+
+      // Right-Axis Live Mid Price Tag
+      if (midY >= 6 && midY <= plotH - 6) {
+        ctx.fillStyle = "#d97706";
+        ctx.fillRect(plotRight + 1, midY - 8, rightAxisW - 2, 16);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 9.5px -apple-system, BlinkMacSystemFont, sans-serif";
+        ctx.fillText(Math.round(mid).toLocaleString("en-IN"), plotRight + 5, midY + 3.5);
+      }
+
+      // Bottom IST Time Axis labels
+      if (allCandles.length) {
+        const labelEvery = Math.max(5, Math.round(bars / 7));
+        ctx.fillStyle = mutedCol;
+        ctx.font = "10px -apple-system, BlinkMacSystemFont, sans-serif";
+        for (let i = visStart; i <= visEnd; i++) {
+          if (i % labelEvery === 0 || i === allCandles.length - 1) {
+            const cx = leftPad + (i - leftEdgeBar + 0.5) * slotW;
+            if (cx < leftPad + 16 || cx > plotRight - 20) continue;
+            const d = new Date(allCandles[i].time * 1000);
+            const hh = String(d.getHours()).padStart(2, "0");
+            const mm = String(d.getMinutes()).padStart(2, "0");
+            ctx.fillText(`${hh}:${mm}`, cx - 14, plotH + 14);
+          }
+        }
+      }
+
+      // Interactive Crosshair + Right Price Pill + Bottom Time Pill + OHLC readout
+      let hoveredCandle = null;
+      if (view.hoverX >= leftPad && view.hoverX < plotRight && view.hoverY >= 0 && view.hoverY < plotH) {
+        const idx = Math.floor((view.hoverX - leftPad) / slotW + leftEdgeBar);
+        if (idx >= 0 && idx < allCandles.length) hoveredCandle = allCandles[idx];
+
+        ctx.save();
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = "rgba(148, 163, 184, 0.45)";
+        ctx.lineWidth = 0.9;
+        ctx.beginPath();
+        ctx.moveTo(view.hoverX, 0);
+        ctx.lineTo(view.hoverX, plotH);
+        ctx.moveTo(leftPad, view.hoverY);
+        ctx.lineTo(plotRight, view.hoverY);
         ctx.stroke();
         ctx.restore();
+
+        // Hovered Price Pill on Right Axis
+        const pAtMouse = highP - (view.hoverY / plotH) * span;
+        ctx.fillStyle = "#334155";
+        ctx.fillRect(plotRight + 1, Math.max(0, view.hoverY - 8), rightAxisW - 2, 16);
+        ctx.fillStyle = "#f8fafc";
+        ctx.font = "bold 9.5px -apple-system, BlinkMacSystemFont, sans-serif";
+        ctx.fillText(Math.round(pAtMouse).toLocaleString("en-IN"), plotRight + 5, Math.max(11, view.hoverY + 3.5));
+
+        // Hovered Time Pill on Bottom Axis
+        if (hoveredCandle) {
+          const d = new Date(hoveredCandle.time * 1000);
+          const tStr = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+          const pillX = Math.max(4, Math.min(plotRight - 42, view.hoverX - 20));
+          ctx.fillStyle = "#334155";
+          ctx.fillRect(pillX, plotH + 2, 40, 17);
+          ctx.fillStyle = "#f8fafc";
+          ctx.fillText(tStr, pillX + 6, plotH + 14);
+        }
       }
+
+      const shown = hoveredCandle || allCandles[allCandles.length - 1];
+      const ohlcEl = document.getElementById("boOhlcHover");
+      if (shown && ohlcEl) {
+        const dt = new Date(shown.time * 1000);
+        const tStr = `${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
+        ohlcEl.textContent =
+          `${tStr}  O:${shown.open.toFixed(1)}  H:${shown.high.toFixed(1)}  L:${shown.low.toFixed(1)}  C:${shown.close.toFixed(1)}`;
+      }
+
+      canvas._geom = {
+        key: "bo",
+        plotLeft: leftPad,
+        plotRight,
+        plotTop: 0,
+        plotBottom: plotH,
+        plotW,
+        plotH,
+        slotW,
+        span,
+        priceAxisSide: "right",
+        timeAxisTop: plotH,
+      };
     }
+
+    // ========================================================================
+    // BROKER-STYLE MOUSE INTERACTIONS (Wheel Zoom · Drag Pan · Axis Drag Zoom)
+    // ========================================================================
+    function bindBrokerChart(canvasId, key) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+      const view = chartViews[key];
+      let dragState = null;
+
+      const redraw = () => {
+        if (!latestState) return;
+        if (key === "ob") drawCandles(latestState, computeDisplayLadder(latestState));
+        else drawBigOrderZones(latestState);
+      };
+
+      const unlockObSyncIfNeeded = () => {
+        if (key === "ob" && syncPriceScale) {
+          syncPriceScale = false;
+          const btn = document.getElementById("btnScaleSync");
+          if (btn) { btn.classList.remove("active"); btn.textContent = "Full Chart"; }
+        }
+      };
+
+      const zoneAt = (x, y, g) => {
+        if (!g) return "plot";
+        if (g.priceAxisSide === "right" && x >= g.plotRight) return "price";
+        if (g.priceAxisSide === "left" && x <= g.plotLeft) return "price";
+        if (y >= g.timeAxisTop) return "time";
+        return "plot";
+      };
+
+      const updateCursor = (x, y) => {
+        if (dragState) {
+          canvas.style.cursor = dragState.mode === "price" ? "ns-resize"
+            : (dragState.mode === "time" ? "ew-resize" : "grabbing");
+          return;
+        }
+        const z = zoneAt(x, y, canvas._geom);
+        canvas.style.cursor = z === "price" ? "ns-resize" : (z === "time" ? "ew-resize" : "crosshair");
+      };
+
+      canvas.addEventListener("contextmenu", (ev) => ev.preventDefault());
+
+      canvas.addEventListener("mousedown", (ev) => {
+        const r = canvas.getBoundingClientRect();
+        const x = ev.clientX - r.left;
+        const y = ev.clientY - r.top;
+        const g = canvas._geom;
+        if (!g) return;
+
+        const z = zoneAt(x, y, g);
+        const mode = ev.button === 2 ? "zoom2d" : z;
+        dragState = {
+          mode,
+          startX: x,
+          startY: y,
+          lastX: x,
+          lastY: y,
+          startBars: view.visibleBars,
+          startYZoom: view.yZoom,
+        };
+        view.dragging = true;
+        updateCursor(x, y);
+      });
+
+      window.addEventListener("mousemove", (ev) => {
+        const r = canvas.getBoundingClientRect();
+        const x = ev.clientX - r.left;
+        const y = ev.clientY - r.top;
+        const inside = x >= 0 && x <= r.width && y >= 0 && y <= r.height;
+
+        if (!dragState) {
+          if (inside) {
+            view.hoverX = x;
+            view.hoverY = y;
+            updateCursor(x, y);
+            redraw();
+          }
+          return;
+        }
+
+        const g = canvas._geom;
+        if (!g) return;
+        const dx = x - dragState.lastX;
+        const dy = y - dragState.lastY;
+        dragState.lastX = x;
+        dragState.lastY = y;
+
+        if (dragState.mode === "price") {
+          // Drag down on price scale = compress candles (zoom out Y); drag up = stretch candles (zoom in Y)
+          unlockObSyncIfNeeded();
+          view.yZoom = Math.max(0.2, Math.min(8.0, view.yZoom * Math.exp(dy * 0.0065)));
+        } else if (dragState.mode === "time") {
+          // Drag left on time scale = more candles (zoom out X); drag right = fewer wider candles (zoom in X)
+          view.visibleBars = Math.max(12, Math.min(380, view.visibleBars * Math.exp(-dx * 0.0065)));
+        } else if (dragState.mode === "zoom2d") {
+          // Right-click drag anywhere = zoom X & Y smoothly
+          unlockObSyncIfNeeded();
+          view.visibleBars = Math.max(12, Math.min(380, view.visibleBars * Math.exp(-dx * 0.005)));
+          view.yZoom = Math.max(0.2, Math.min(8.0, view.yZoom * Math.exp(dy * 0.006)));
+        } else {
+          // Left-click drag inside plot = smooth 1:1 2D Pan (horizontal candles + vertical price)
+          view.panBars += dx / Math.max(1, g.slotW);
+          if (Math.abs(dy) > 0) {
+            unlockObSyncIfNeeded();
+            view.yPanPts += (dy / Math.max(20, g.plotH)) * g.span;
+          }
+        }
+        view.hoverX = x;
+        view.hoverY = y;
+        redraw();
+      });
+
+      window.addEventListener("mouseup", (ev) => {
+        if (!dragState) return;
+        dragState = null;
+        view.dragging = false;
+        const r = canvas.getBoundingClientRect();
+        updateCursor(ev.clientX - r.left, ev.clientY - r.top);
+      });
+
+      canvas.addEventListener("mouseleave", () => {
+        if (!dragState) {
+          view.hoverX = -1;
+          view.hoverY = -1;
+          redraw();
+        }
+      });
+
+      canvas.addEventListener("dblclick", (ev) => {
+        const r = canvas.getBoundingClientRect();
+        const z = zoneAt(ev.clientX - r.left, ev.clientY - r.top, canvas._geom);
+        if (z === "price") {
+          view.yZoom = 1.0;
+          view.yPanPts = 0;
+          redraw();
+        } else if (z === "time") {
+          view.visibleBars = view.defaultBars;
+          view.panBars = 0;
+          redraw();
+        } else {
+          resetChart(key);
+        }
+      });
+
+      canvas.addEventListener("wheel", (ev) => {
+        ev.preventDefault();
+        const g = canvas._geom;
+        if (!g) return;
+        const r = canvas.getBoundingClientRect();
+        const x = ev.clientX - r.left;
+        const y = ev.clientY - r.top;
+        const z = zoneAt(x, y, g);
+        const zoomOut = ev.deltaY > 0;
+        const xFactor = zoomOut ? 1.15 : (1 / 1.15);
+        const yFactor = zoomOut ? 1.10 : (1 / 1.10);
+
+        if (z === "price" || ev.ctrlKey || ev.shiftKey) {
+          unlockObSyncIfNeeded();
+          view.yZoom = Math.max(0.2, Math.min(8.0, view.yZoom * (zoomOut ? 1.14 : (1 / 1.14))));
+        } else if (z === "time") {
+          view.visibleBars = Math.max(12, Math.min(380, view.visibleBars * xFactor));
+        } else {
+          // Anchor horizontal zoom around mouse X position
+          const oldBars = view.visibleBars;
+          const newBars = Math.max(12, Math.min(380, oldBars * xFactor));
+          const fracRight = Math.max(0, Math.min(1, (g.plotRight - x) / Math.max(1, g.plotW)));
+          view.panBars += (oldBars - newBars) * fracRight;
+          view.visibleBars = newBars;
+
+          if (key === "bo" || !syncPriceScale) {
+            view.yZoom = Math.max(0.2, Math.min(8.0, view.yZoom * yFactor));
+          }
+        }
+        view.hoverX = x;
+        view.hoverY = y;
+        redraw();
+      }, { passive: false });
+    }
+
+    bindBrokerChart("candleCanvas", "ob");
+    bindBrokerChart("boZoneCanvas", "bo");
 
     window.addEventListener("resize", () => {
       if (!latestState) return;
