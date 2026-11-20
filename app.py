@@ -9,7 +9,7 @@ Supports:
 # SETTINGS — Every setting is here at the top with a one-line comment
 # ==============================================================================
 SOURCE = "demo"                  # Startup data source: "demo" or "upstox" (overridden by .env if token is set)
-DEFAULT_SYMBOL = "NIFTY"         # Default index future on startup: "NIFTY" or "BANKNIFTY"
+DEFAULT_SYMBOL = "NIFTY"         # Default index future on startup: "NIFTY", "BANKNIFTY", or "SENSEX"
 BAND_SIZE = 1.0                  # Order book price band grouping size in index points (e.g. 1.0, 2.0, 5.0)
 DEMO_LEVELS = 20                 # Number of waiting order levels on each side in demo mode
 DEMO_LOT_SIZE = 65               # Lot size used to count lots in demo mode (live mode reads exact broker lot size)
@@ -60,11 +60,37 @@ IST = timezone(timedelta(hours=5, minutes=30))
 UNDERLYING_INDEX_KEYS = {
     "NIFTY": "NSE_INDEX|Nifty 50",
     "BANKNIFTY": "NSE_INDEX|Nifty Bank",
+    "SENSEX": "BSE_INDEX|SENSEX",
 }
 
 SYMBOL_DEFAULTS = {
-    "NIFTY": {"base_price": 25000.0, "lot_size": DEMO_LOT_SIZE, "oi_range": OI_RANGE_POINTS, "oi_step": OI_STEP_POINTS},
-    "BANKNIFTY": {"base_price": 53400.0, "lot_size": 30, "oi_range": 1500, "oi_step": 100},
+    "NIFTY": {
+        "exchange": "NSE",
+        "base_price": 25350.0,
+        "lot_size": DEMO_LOT_SIZE,
+        "oi_range": OI_RANGE_POINTS,
+        "oi_step": OI_STEP_POINTS,
+        "default_band": 1.0,
+        "step_scale": 1.0,
+    },
+    "BANKNIFTY": {
+        "exchange": "NSE",
+        "base_price": 53400.0,
+        "lot_size": 30,
+        "oi_range": 1500,
+        "oi_step": 100,
+        "default_band": 2.0,
+        "step_scale": 2.4,
+    },
+    "SENSEX": {
+        "exchange": "BSE",
+        "base_price": 83500.0,
+        "lot_size": 20,
+        "oi_range": 2000,
+        "oi_step": 100,
+        "default_band": 5.0,
+        "step_scale": 3.5,
+    },
 }
 
 UPSTOX_RATE_LIMIT_NOTE = (
@@ -359,7 +385,11 @@ class MarketScreenEngine:
             c["low"] = round(min(c["low"], p), 2)
             c["close"] = p
         else:
-            open_p = self.candles[-1]["close"] if self.candles else p
+            # Across overnight / >3-min session gaps, start candle at actual new tick `p`
+            if self.candles and (bucket - self.candles[-1]["time"]) <= 180:
+                open_p = self.candles[-1]["close"]
+            else:
+                open_p = p
             self.candles.append({
                 "time": bucket,
                 "open": round(open_p, 2),
@@ -376,7 +406,7 @@ class MarketScreenEngine:
     def _seed_demo_history(self):
         defaults = SYMBOL_DEFAULTS.get(self.symbol, SYMBOL_DEFAULTS["NIFTY"])
         base = defaults["base_price"]
-        step_scale = 1.0 if self.symbol == "NIFTY" else 2.4
+        step_scale = defaults.get("step_scale", 1.0)
         now_bucket = (int(time.time()) // 60) * 60
         p = base - random.uniform(-12, 12) * step_scale
         candles = []
@@ -421,13 +451,13 @@ class MarketScreenEngine:
     def _tick_demo_book_locked(self):
         defaults = SYMBOL_DEFAULTS.get(self.symbol, SYMBOL_DEFAULTS["NIFTY"])
         lot_sz = defaults["lot_size"]
-        step_scale = 1.0 if self.symbol == "NIFTY" else 2.5
+        step_scale = defaults.get("step_scale", 1.0)
 
         # Gentle wandering price with subtle bounce off resting walls
         drift = (defaults["base_price"] - self.mid_price) * 0.03
         move = random.gauss(drift, 0.85 * step_scale)
         self.mid_price = round(self.mid_price + move, 2)
-        half_spread = 0.25 if self.symbol == "NIFTY" else 0.50
+        half_spread = 0.25 if self.symbol == "NIFTY" else (1.0 if self.symbol == "SENSEX" else 0.50)
         anchor = round(self.mid_price * 2) / 2.0
 
         self.best_bid = round(anchor - half_spread, 2)
@@ -440,7 +470,7 @@ class MarketScreenEngine:
 
         bids = []
         asks = []
-        level_step = 0.5 if self.band_size <= 1.0 else 1.0
+        level_step = 0.5 if self.band_size <= 1.0 else max(1.0, self.band_size * 0.5)
         # 20 levels on each side -> covers ~10-20 points each side
         for idx in range(DEMO_LEVELS):
             bp = round(self.best_bid - idx * level_step, 2)
@@ -674,10 +704,12 @@ class MarketScreenEngine:
                     self.status_message = msg
 
     def _resolve_nearest_future(self, client, symbol: str) -> dict:
+        defaults = SYMBOL_DEFAULTS.get(symbol.upper(), SYMBOL_DEFAULTS["NIFTY"])
+        exch = defaults.get("exchange", "NSE")
         inst_api = upstox_client.InstrumentsApi(client)
         resp = inst_api.search_instrument(
             symbol,
-            exchanges="NSE",
+            exchanges=exch,
             segments="FO",
             instrument_types="FUT",
             records=30,
@@ -686,17 +718,25 @@ class MarketScreenEngine:
         matches = []
         for item in raw_list:
             u_sym = str(extract_field(item, "underlying_symbol", default="")).upper()
-            if u_sym == symbol.upper():
+            t_sym = str(extract_field(item, "trading_symbol", default="")).upper()
+            is_exact = u_sym == symbol.upper()
+            is_sensex_alias = (
+                symbol.upper() == "SENSEX"
+                and u_sym in ("SENSEX", "BSX")
+                and "SENSEX50" not in t_sym
+                and "BANKEX" not in t_sym
+            )
+            if is_exact or is_sensex_alias:
                 exp = normalize_expiry(extract_field(item, "expiry", default=""))
                 matches.append({
                     "instrument_key": extract_field(item, "instrument_key", default=""),
                     "trading_symbol": extract_field(item, "trading_symbol", default=f"{symbol} FUT"),
                     "expiry": exp,
-                    "lot_size": int(extract_field(item, "lot_size", default=SYMBOL_DEFAULTS[symbol]["lot_size"]) or 65),
+                    "lot_size": int(extract_field(item, "lot_size", default=defaults["lot_size"]) or defaults["lot_size"]),
                 })
 
         if not matches:
-            raise RuntimeError(f"No NSE FO futures found for {symbol}.")
+            raise RuntimeError(f"No {exch} FO futures found for {symbol}.")
 
         today_s = now_ist().strftime("%Y-%m-%d")
         upcoming = [m for m in matches if m["expiry"] >= today_s]
@@ -809,13 +849,34 @@ class MarketScreenEngine:
             opt_api = upstox_client.OptionsApi(client)
 
             # Discover nearest valid option expiry
-            contracts_resp = opt_api.get_option_contracts(underlying_key)
-            contracts = contracts_resp.data or []
-            expiries = sorted({
-                normalize_expiry(extract_field(c, "expiry", default=""))
-                for c in contracts
-                if normalize_expiry(extract_field(c, "expiry", default=""))
-            })
+            expiries = []
+            try:
+                contracts_resp = opt_api.get_option_contracts(underlying_key)
+                contracts = contracts_resp.data or []
+                expiries = sorted({
+                    normalize_expiry(extract_field(c, "expiry", default=""))
+                    for c in contracts
+                    if normalize_expiry(extract_field(c, "expiry", default=""))
+                })
+            except Exception:
+                expiries = []
+
+            if not expiries:
+                exch = SYMBOL_DEFAULTS.get(self.symbol, SYMBOL_DEFAULTS["NIFTY"]).get("exchange", "NSE")
+                inst_api = upstox_client.InstrumentsApi(client)
+                for exp_hint in ("current_week", "current_month"):
+                    s_resp = inst_api.search_instrument(
+                        self.symbol, exchanges=exch, segments="FO",
+                        instrument_types="CE", expiry=exp_hint, records=10
+                    )
+                    for hit in (s_resp.data or []):
+                        e_str = normalize_expiry(extract_field(hit, "expiry", default=""))
+                        if e_str:
+                            expiries.append(e_str)
+                    if expiries:
+                        expiries = sorted(set(expiries))
+                        break
+
             today_s = now_ist().strftime("%Y-%m-%d")
             valid_exps = [e for e in expiries if e >= today_s]
             nearest_exp = (valid_exps or expiries)[0] if (valid_exps or expiries) else ""
@@ -1061,6 +1122,9 @@ class MarketScreenEngine:
             source_changed = new_source in ("demo", "upstox") and new_source != self.source
             symbol_changed = new_symbol in SYMBOL_DEFAULTS and new_symbol != self.symbol
 
+            if symbol_changed and "band_size" not in payload:
+                self.band_size = float(SYMBOL_DEFAULTS[new_symbol].get("default_band", 1.0))
+
             if source_changed or symbol_changed or force_reconnect:
                 self.session_id += 1
                 self._stop_streamer_quietly()
@@ -1105,6 +1169,7 @@ class MarketScreenEngine:
                 "highlight_top_n": HIGHLIGHT_TOP_N,
                 "token_configured": token_configured,
                 "token_expired": self.token_expired,
+                "can_setup_deploy": not bool(os.environ.get("RENDER")),
                 "connection_status": self.connection_status,
                 "status_message": self.status_message,
                 "rate_limit_note": UPSTOX_RATE_LIMIT_NOTE,
@@ -1187,6 +1252,12 @@ class ScreenRequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(html)
         elif parsed.path == "/api/state":
             self._send_json(200, ENGINE.get_state_snapshot())
+        elif parsed.path == "/api/deploy-status" and not os.environ.get("RENDER"):
+            try:
+                import deploy_helper
+                self._send_json(200, deploy_helper.get_deploy_status())
+            except Exception as exc:
+                self._send_json(200, {"state": "idle", "message": str(exc)[:120]})
         else:
             self.send_error(404, "Not found")
 
@@ -1194,15 +1265,27 @@ class ScreenRequestHandler(BaseHTTPRequestHandler):
         if not self._check_auth():
             return
         parsed = urlparse(self.path)
+        length = int(self.headers.get("Content-Length", "0") or 0)
+        raw = self.rfile.read(length) if length > 0 else b"{}"
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except Exception:
+            payload = {}
+
         if parsed.path == "/api/control":
-            length = int(self.headers.get("Content-Length", "0") or 0)
-            raw = self.rfile.read(length) if length > 0 else b"{}"
-            try:
-                payload = json.loads(raw.decode("utf-8"))
-            except Exception:
-                payload = {}
             snapshot = ENGINE.apply_control(payload)
             self._send_json(200, snapshot)
+        elif parsed.path == "/api/save-token" and not os.environ.get("RENDER"):
+            import deploy_helper
+            deploy_helper.save_credentials(payload)
+            snapshot = ENGINE.apply_control({"source": "upstox", "reconnect": True})
+            self._send_json(200, snapshot)
+        elif parsed.path == "/api/setup-deploy" and not os.environ.get("RENDER"):
+            import deploy_helper
+            status = deploy_helper.start_full_deploy(payload)
+            if payload.get("upstox_token"):
+                ENGINE.apply_control({"source": "upstox", "reconnect": True})
+            self._send_json(200, status)
         else:
             self.send_error(404, "Not found")
 
