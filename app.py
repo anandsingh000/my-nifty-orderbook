@@ -10,7 +10,7 @@ Supports:
 # ==============================================================================
 SOURCE = "demo"                  # Startup data source: "demo" or "upstox" (overridden by .env if token is set)
 DEFAULT_SYMBOL = "NIFTY"         # Default index future on startup: "NIFTY", "BANKNIFTY", or "SENSEX"
-BAND_SIZE = 1.0                  # Order book price band grouping size in index points (e.g. 1.0, 2.0, 5.0)
+BAND_SIZE = 5.0                  # Order book price band grouping size in index points (1, 2, 5, or 10)
 DEMO_LEVELS = 20                 # Number of waiting order levels on each side in demo mode
 DEMO_LOT_SIZE = 65               # Lot size used to count lots in demo mode (live mode reads exact broker lot size)
 HIGHLIGHT_TOP_N = 3              # Number of largest order bands highlighted solid & labelled on each side
@@ -70,7 +70,7 @@ SYMBOL_DEFAULTS = {
         "lot_size": DEMO_LOT_SIZE,
         "oi_range": OI_RANGE_POINTS,
         "oi_step": OI_STEP_POINTS,
-        "default_band": 1.0,
+        "default_band": 5.0,
         "step_scale": 1.0,
     },
     "BANKNIFTY": {
@@ -79,7 +79,7 @@ SYMBOL_DEFAULTS = {
         "lot_size": 30,
         "oi_range": 1500,
         "oi_step": 100,
-        "default_band": 2.0,
+        "default_band": 5.0,
         "step_scale": 2.4,
     },
     "SENSEX": {
@@ -88,7 +88,7 @@ SYMBOL_DEFAULTS = {
         "lot_size": 20,
         "oi_range": 2000,
         "oi_step": 100,
-        "default_band": 5.0,
+        "default_band": 10.0,
         "step_scale": 3.5,
     },
 }
@@ -1252,12 +1252,6 @@ class ScreenRequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(html)
         elif parsed.path == "/api/state":
             self._send_json(200, ENGINE.get_state_snapshot())
-        elif parsed.path == "/api/deploy-status" and not os.environ.get("RENDER"):
-            try:
-                import deploy_helper
-                self._send_json(200, deploy_helper.get_deploy_status())
-            except Exception as exc:
-                self._send_json(200, {"state": "idle", "message": str(exc)[:120]})
         else:
             self.send_error(404, "Not found")
 
@@ -1275,17 +1269,6 @@ class ScreenRequestHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/control":
             snapshot = ENGINE.apply_control(payload)
             self._send_json(200, snapshot)
-        elif parsed.path == "/api/save-token" and not os.environ.get("RENDER"):
-            import deploy_helper
-            deploy_helper.save_credentials(payload)
-            snapshot = ENGINE.apply_control({"source": "upstox", "reconnect": True})
-            self._send_json(200, snapshot)
-        elif parsed.path == "/api/setup-deploy" and not os.environ.get("RENDER"):
-            import deploy_helper
-            status = deploy_helper.start_full_deploy(payload)
-            if payload.get("upstox_token"):
-                ENGINE.apply_control({"source": "upstox", "reconnect": True})
-            self._send_json(200, status)
         else:
             self.send_error(404, "Not found")
 

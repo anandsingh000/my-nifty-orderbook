@@ -65,47 +65,50 @@
       font-variant-numeric: tabular-nums;
     }
 
-    /* Top Bar */
+    /* Top Bar — Single clean horizontal row on laptop/desktop */
     .topbar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
-      padding: 8px 14px;
+      gap: 8px;
+      padding: 7px 12px;
       background: var(--bg-panel);
       border-bottom: 1px solid var(--border-subtle);
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+      overflow-x: auto;
     }
 
     .brand-group {
       display: flex;
       align-items: center;
-      gap: 14px;
-      flex-wrap: wrap;
+      gap: 10px;
+      flex-wrap: nowrap;
+      white-space: nowrap;
     }
 
     .contract-badge {
       display: flex;
       align-items: baseline;
-      gap: 8px;
+      gap: 7px;
+      white-space: nowrap;
     }
 
     .contract-name {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 700;
-      letter-spacing: 0.3px;
+      letter-spacing: 0.2px;
     }
 
     .price-big {
-      font-size: 21px;
+      font-size: 20px;
       font-weight: 800;
       letter-spacing: -0.3px;
     }
 
     .chg-pill {
-      font-size: 12px;
+      font-size: 11.5px;
       font-weight: 600;
-      padding: 2px 7px;
+      padding: 2px 6px;
       border-radius: 4px;
     }
     .chg-up { color: var(--buy-text); background: var(--buy-soft); }
@@ -114,16 +117,16 @@
     .meta-pills {
       display: flex;
       align-items: center;
-      gap: 6px;
-      flex-wrap: wrap;
+      gap: 5px;
+      flex-wrap: nowrap;
     }
 
     .pill {
-      font-size: 11px;
+      font-size: 10.5px;
       color: var(--text-secondary);
       background: var(--bg-panel-alt);
       border: 1px solid var(--border-subtle);
-      padding: 3px 8px;
+      padding: 3px 6px;
       border-radius: 5px;
       white-space: nowrap;
     }
@@ -137,7 +140,7 @@
       width: 7px;
       height: 7px;
       border-radius: 50%;
-      margin-right: 5px;
+      margin-right: 4px;
       vertical-align: middle;
     }
     .dot-green { background: #10b981; box-shadow: 0 0 6px #10b981; }
@@ -148,8 +151,9 @@
     .controls {
       display: flex;
       align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
+      gap: 6px;
+      flex-wrap: nowrap;
+      white-space: nowrap;
     }
 
     .seg-group {
@@ -164,8 +168,8 @@
       background: transparent;
       color: var(--text-secondary);
       border: none;
-      padding: 4px 9px;
-      font-size: 11.5px;
+      padding: 4px 7px;
+      font-size: 11px;
       font-weight: 600;
       cursor: pointer;
       transition: background 0.12s, color 0.12s;
@@ -183,8 +187,8 @@
       color: var(--text-secondary);
       border: 1px solid var(--border-subtle);
       border-radius: 6px;
-      padding: 4px 9px;
-      font-size: 11.5px;
+      padding: 4px 7px;
+      font-size: 11px;
       font-weight: 600;
       cursor: pointer;
     }
@@ -577,154 +581,9 @@
       .workspace {
         grid-template-columns: 1fr;
         height: auto;
-      @media (max-width: 1080px) {
-      body { overflow: auto; height: auto; }
-      .workspace {
-        grid-template-columns: 1fr;
-        height: auto;
       }
       .panel { height: 520px; }
     }
-
-    /* Setup & Auto-Deploy Modal (Local / Arena Workspace Only) */
-    .deploy-cta-btn {
-      background: #10b981;
-      color: #062117;
-      border: none;
-      border-radius: 6px;
-      padding: 5px 11px;
-      font-size: 11.5px;
-      font-weight: 800;
-      cursor: pointer;
-      display: none;
-    }
-    .deploy-cta-btn:hover { filter: brightness(1.08); }
-
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(5, 9, 16, 0.78);
-      backdrop-filter: blur(3px);
-      z-index: 1000;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-    }
-    .modal-backdrop.open { display: flex; }
-
-    .modal-card {
-      background: var(--bg-panel);
-      border: 1px solid var(--border-subtle);
-      border-radius: 10px;
-      width: 100%;
-      max-width: 560px;
-      max-height: 92vh;
-      overflow-y: auto;
-      padding: 18px 20px;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
-    }
-    .modal-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 8px;
-    }
-    .modal-title {
-      font-size: 16px;
-      font-weight: 800;
-    }
-    .modal-close {
-      background: transparent;
-      border: none;
-      color: var(--text-secondary);
-      font-size: 20px;
-      cursor: pointer;
-    }
-    .modal-note {
-      font-size: 12px;
-      color: var(--text-secondary);
-      line-height: 1.45;
-      margin-bottom: 14px;
-      padding: 8px 10px;
-      background: var(--bg-panel-alt);
-      border-radius: 6px;
-      border: 1px solid var(--border-subtle);
-    }
-    .field-block {
-      margin-bottom: 11px;
-    }
-    .field-label {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      font-size: 12px;
-      font-weight: 700;
-      margin-bottom: 4px;
-    }
-    .field-label a {
-      color: var(--accent-blue);
-      font-weight: 600;
-      font-size: 11px;
-      text-decoration: none;
-    }
-    .field-label a:hover { text-decoration: underline; }
-    .field-input {
-      width: 100%;
-      padding: 8px 10px;
-      border-radius: 6px;
-      border: 1px solid var(--border-subtle);
-      background: var(--bg-app);
-      color: var(--text-primary);
-      font-size: 12.5px;
-      outline: none;
-    }
-    .field-input:focus { border-color: var(--accent-blue); }
-    .saved-chip {
-      font-size: 10px;
-      color: var(--buy-text);
-      margin-left: 6px;
-    }
-    .modal-actions {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 14px;
-    }
-    .btn-primary {
-      flex: 1;
-      background: #10b981;
-      color: #052016;
-      border: none;
-      border-radius: 6px;
-      padding: 9px 14px;
-      font-size: 12.5px;
-      font-weight: 800;
-      cursor: pointer;
-    }
-    .btn-secondary {
-      background: var(--bg-panel-alt);
-      color: var(--text-primary);
-      border: 1px solid var(--border-subtle);
-      border-radius: 6px;
-      padding: 9px 12px;
-      font-size: 12px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    .deploy-status-box {
-      display: none;
-      margin-top: 12px;
-      padding: 10px 12px;
-      border-radius: 6px;
-      font-size: 12px;
-      line-height: 1.5;
-      background: var(--bg-panel-alt);
-      border: 1px solid var(--border-subtle);
-      word-break: break-word;
-    }
-    .deploy-status-box.show { display: block; }
-    .deploy-status-box a { color: #34d399; font-weight: 800; }
   </style>
 </head>
 <body>
@@ -786,11 +645,6 @@
       <!-- Theme Switch -->
       <button class="action-btn" id="btnTheme" onclick="toggleTheme()" title="Switch Light / Dark theme">
         Light
-      </button>
-
-      <!-- Setup Keys & Auto-Deploy Button (Hidden automatically on Render) -->
-      <button class="deploy-cta-btn" id="btnOpenDeploy" onclick="openDeployModal()">
-        🔑 Token &amp; Render Deploy
       </button>
     </div>
   </header>
@@ -1047,22 +901,16 @@
 
       const snappedHigh = Math.ceil(cHigh / bs) * bs;
       const snappedLow = Math.floor(cLow / bs) * bs;
-      const minRows = 21;
-      const maxAllowedRows = 40;
-      let topPrice = Math.max(maxP, snappedHigh);
-      let botPrice = Math.min(minP, snappedLow);
+      const targetRows = 41; // Exact ~41-42 row ladder format matching image-1
+      const centerSnap = Math.round(mid / bs) * bs;
+      const half = Math.floor(targetRows / 2);
 
-      const curRows = Math.round((topPrice - botPrice) / bs) + 1;
-      if (curRows < minRows) {
-        const centerSnap = Math.round(mid / bs) * bs;
-        const half = Math.floor(minRows / 2);
-        topPrice = Math.max(topPrice, centerSnap + half * bs);
-        botPrice = Math.min(botPrice, centerSnap - half * bs);
-      } else if (curRows > maxAllowedRows) {
-        const centerSnap = Math.round(mid / bs) * bs;
-        const half = Math.floor(maxAllowedRows / 2);
+      let topPrice = Math.max(maxP, snappedHigh, centerSnap + half * bs);
+      let botPrice = Math.min(minP, snappedLow, centerSnap - half * bs);
+
+      if ((topPrice - botPrice) / bs + 1 > 42) {
         topPrice = centerSnap + half * bs;
-        botPrice = topPrice - (maxAllowedRows - 1) * bs;
+        botPrice = topPrice - 41 * bs;
       }
 
       const unifiedRows = [];
@@ -1123,11 +971,6 @@
       }
 
       // Active control highlights
-      const deployBtn = document.getElementById("btnOpenDeploy");
-      if (deployBtn) {
-        deployBtn.style.display = state.can_setup_deploy ? "inline-block" : "none";
-      }
-
       document.getElementById("btnSourceDemo").classList.toggle("active", state.source === "demo");
       document.getElementById("btnSourceUpstox").classList.toggle("active", state.source === "upstox");
       document.getElementById("btnSymNifty").classList.toggle("active", state.symbol === "NIFTY");
@@ -1272,7 +1115,8 @@
       ctx.fillStyle = mutedCol;
       ctx.font = "10px -apple-system, BlinkMacSystemFont, sans-serif";
 
-      const step = state.symbol === "SENSEX" ? 25 : (state.symbol === "BANKNIFTY" ? 10 : 5);
+      const bsGrid = Number(state.band_size || 5);
+      const step = bsGrid >= 5 ? bsGrid : 5;
       const firstGrid = Math.ceil(lowP / step) * step;
       for (let gp = firstGrid; gp <= highP; gp += step) {
         const y = yOf(gp);
@@ -1436,160 +1280,8 @@
       if (latestState) drawCandles(latestState, computeDisplayLadder(latestState));
     });
 
-    // ========================================================================
-    // TOKEN SETUP & 1-CLICK GITHUB + RENDER AUTO-DEPLOY (Local Workspace Only)
-    // ========================================================================
-    let deployPoller = null;
-
-    async function openDeployModal() {
-      document.getElementById("deployModal").classList.add("open");
-      await refreshDeployStatus();
-    }
-
-    function closeDeployModal() {
-      document.getElementById("deployModal").classList.remove("open");
-    }
-
-    async function refreshDeployStatus() {
-      try {
-        const res = await fetch("/api/deploy-status", { cache: "no-store" });
-        if (!res.ok) return;
-        const st = await res.json();
-        renderDeployStatus(st);
-      } catch (e) {}
-    }
-
-    function renderDeployStatus(st) {
-      if (!st) return;
-      const kp = st.keys_present || {};
-      document.getElementById("chipUpstox").textContent = kp.upstox ? "✓ Saved" : "";
-      document.getElementById("chipGithub").textContent = kp.github ? "✓ Saved" : "";
-      document.getElementById("chipRender").textContent = kp.render ? "✓ Saved" : "";
-      document.getElementById("chipPass").textContent = kp.password ? "✓ Saved" : "";
-
-      const box = document.getElementById("deployStatusBox");
-      if (st.state && st.state !== "idle") {
-        box.classList.add("show");
-        let html = `<strong>Status (${st.state.toUpperCase()}):</strong> ${st.message || ""}`;
-        if (st.github_repo) {
-          html += `<br>GitHub Repo: <a href="${st.github_repo}" target="_blank" rel="noopener">${st.github_repo}</a>`;
-        }
-        if (st.render_url) {
-          html += `<br>Render Live Link: <a href="${st.render_url}" target="_blank" rel="noopener">${st.render_url}</a>`;
-        }
-        box.innerHTML = html;
-
-        if (st.state === "running" && !deployPoller) {
-          deployPoller = setInterval(refreshDeployStatus, 2500);
-        } else if (st.state !== "running" && deployPoller) {
-          clearInterval(deployPoller);
-          deployPoller = null;
-        }
-      }
-    }
-
-    function collectModalPayload() {
-      return {
-        upstox_token: document.getElementById("inpUpstox").value.trim(),
-        github_token: document.getElementById("inpGithub").value.trim(),
-        render_api_key: document.getElementById("inpRender").value.trim(),
-        app_password: document.getElementById("inpPass").value.trim(),
-      };
-    }
-
-    async function saveUpstoxOnly() {
-      const payload = collectModalPayload();
-      const box = document.getElementById("deployStatusBox");
-      box.classList.add("show");
-      box.textContent = "Saving Upstox Analytics Token & connecting live stream...";
-      const res = await fetch("/api/save-token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (res.ok) {
-        latestState = await res.json();
-        renderAll(latestState);
-        document.getElementById("inpUpstox").value = "";
-        box.innerHTML = "<strong>Saved!</strong> Upstox Analytics Token saved to <code>.env</code> and switched to <strong>Upstox Live</strong>!";
-        await refreshDeployStatus();
-      }
-    }
-
-    async function triggerFullDeploy() {
-      const payload = collectModalPayload();
-      const res = await fetch("/api/setup-deploy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (res.ok) {
-        const st = await res.json();
-        document.getElementById("inpUpstox").value = "";
-        document.getElementById("inpGithub").value = "";
-        document.getElementById("inpRender").value = "";
-        renderDeployStatus(st);
-        if (st.state === "running" && !deployPoller) {
-          deployPoller = setInterval(refreshDeployStatus, 2500);
-        }
-      }
-    }
-
     fetchState();
     setInterval(fetchState, REFRESH_MS);
   </script>
-
-  <!-- SECURE TOKEN & AUTO-DEPLOY MODAL -->
-  <div class="modal-backdrop" id="deployModal">
-    <div class="modal-card">
-      <div class="modal-head">
-        <span class="modal-title">🔑 Token Lagayein &amp; Render Par Online Karein</span>
-        <button class="modal-close" onclick="closeDeployModal()">&times;</button>
-      </div>
-
-      <div class="modal-note">
-        <strong>100% Safe:</strong> Yahan daale gaye tokens chat mein nahi jaate — seedha private <code>.env</code> / Render ke encrypted Environment Variables mein save hote hain. (Render par deploy hone ke baad yeh popup khud gayab ho jayega.)
-      </div>
-
-      <div class="field-block">
-        <div class="field-label">
-          <span>1. Upstox Analytics Token <span class="saved-chip" id="chipUpstox"></span></span>
-          <a href="https://account.upstox.com/developer/apps#analytics" target="_blank" rel="noopener">Upstox se copy karein &rarr;</a>
-        </div>
-        <input type="password" class="field-input" id="inpUpstox" placeholder="Paste Upstox Analytics Token here..." autocomplete="off" />
-      </div>
-
-      <div class="field-block">
-        <div class="field-label">
-          <span>2. GitHub Token ('repo' tick karke) <span class="saved-chip" id="chipGithub"></span></span>
-          <a href="https://github.com/settings/tokens/new?scopes=repo&description=NiftyOrderBook" target="_blank" rel="noopener">1-Click GitHub Token banayein &rarr;</a>
-        </div>
-        <input type="password" class="field-input" id="inpGithub" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx (GitHub upload ke liye)" autocomplete="off" />
-      </div>
-
-      <div class="field-block">
-        <div class="field-label">
-          <span>3. Render API Key <span class="saved-chip" id="chipRender"></span></span>
-          <a href="https://dashboard.render.com/u/settings#api-keys" target="_blank" rel="noopener">Render API Key banayein &rarr;</a>
-        </div>
-        <input type="password" class="field-input" id="inpRender" placeholder="rnd_xxxxxxxxxxxxxxxxxxxx (Render deploy ke liye)" autocomplete="off" />
-      </div>
-
-      <div class="field-block">
-        <div class="field-label">
-          <span>4. Online Screen Password (APP_PASSWORD) <span class="saved-chip" id="chipPass"></span></span>
-          <span style="font-size:10.5px; color:var(--text-muted);">Taaki link sirf aap khol sakein</span>
-        </div>
-        <input type="text" class="field-input" id="inpPass" placeholder="e.g. MeraNifty@2026 (khali chhodne par auto-banega)" autocomplete="off" />
-      </div>
-
-      <div class="modal-actions">
-        <button class="btn-secondary" onclick="saveUpstoxOnly()">Sirf Upstox Yahan Chalayein</button>
-        <button class="btn-primary" onclick="triggerFullDeploy()">GitHub + Render Par Deploy Karein 🚀</button>
-      </div>
-
-      <div class="deploy-status-box" id="deployStatusBox"></div>
-    </div>
-  </div>
 </body>
 </html>
