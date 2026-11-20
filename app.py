@@ -34,8 +34,10 @@ import json
 import math
 import os
 import random
+import statistics
 import threading
 import time
+from collections import deque
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -71,6 +73,9 @@ SYMBOL_DEFAULTS = {
         "oi_range": OI_RANGE_POINTS,
         "oi_step": OI_STEP_POINTS,
         "default_band": 5.0,
+        "big_band": 5,
+        "near_window": 20,
+        "demo_basis": 6.5,
         "step_scale": 1.0,
     },
     "BANKNIFTY": {
@@ -80,6 +85,9 @@ SYMBOL_DEFAULTS = {
         "oi_range": 1500,
         "oi_step": 100,
         "default_band": 5.0,
+        "big_band": 10,
+        "near_window": 50,
+        "demo_basis": 18.0,
         "step_scale": 2.4,
     },
     "SENSEX": {
@@ -89,6 +97,9 @@ SYMBOL_DEFAULTS = {
         "oi_range": 2000,
         "oi_step": 100,
         "default_band": 10.0,
+        "big_band": 20,
+        "near_window": 100,
+        "demo_basis": 25.0,
         "step_scale": 3.5,
     },
 }
@@ -349,6 +360,8 @@ class MarketScreenEngine:
 
         self.ltp = base
         self.mid_price = base
+        self.spot_price = round(base - defaults.get("demo_basis", 6.5), 2)
+        self.spot_basis = float(defaults.get("demo_basis", 6.5))
         self.prev_close = base - 42.5
         self.best_bid = base - 0.5
         self.best_ask = base + 0.5
@@ -359,6 +372,26 @@ class MarketScreenEngine:
         self.option_summary: dict = {}
         self.last_book_ts = 0.0
         self.last_oi_ts = 0.0
+
+        # Big Orders tracker state ("Big orders right now" tab)
+        self._band_lots_samples: deque[float] = deque(maxlen=400)
+        self._near_depth_samples: deque[float] = deque(maxlen=300)
+        self._spread_samples: deque[float] = deque(maxlen=300)
+        self._resting_walls: dict[tuple[str, int], dict] = {}
+        self._wall_events: deque[dict] = deque(maxlen=16)
+        self.big_orders_snapshot: dict = {
+            "items": [],
+            "events": [],
+            "near_window": defaults.get("near_window", 20),
+            "depth_pct_usual": 100,
+            "spread": 0.0,
+            "usual_spread": 0.0,
+            "usual_band_lots": 0.0,
+            "buyers_pct": 50,
+            "sellers_pct": 50,
+            "buy_near_lots": 0,
+            "sell_near_lots": 0,
+        }
 
         self.connection_status = "starting"
         self.status_message = "Initializing market screen..."
@@ -401,6 +434,195 @@ class MarketScreenEngine:
                 self.candles = self.candles[-MAX_CANDLES:]
 
     # --------------------------------------------------------------------------
+    # BIG ORDERS ENGINE ("Big orders right now" tab — resting walls & context)
+    # --------------------------------------------------------------------------
+    @staticmethod
+    def _fmt_resting(seconds: float) -> str:
+        s = max(1, int(round(seconds)))
+        if s < 60:
+            return f"resting {s}s"
+        return f"resting {s // 60} min"
+
+    def _update_big_orders_locked(self):
+        defaults = SYMBOL_DEFAULTS.get(self.symbol, SYMBOL_DEFAULTS["NIFTY"])
+        w = int(defaults.get("big_band", 5))
+        near_win = int(defaults.get("near_window", 20))
+        strike_step = int(defaults.get("oi_step", 50))
+        lot_sz = max(1, int(self.lot_size or 1))
+        mid = float(self.mid_price or self.ltp or defaults["base_price"])
+        now = time.time()
+
+        # Group buy & sell depth into [band_low, band_low + w] ranges
+        buy_bands: dict[int, float] = {}
+        sell_bands: dict[int, float] = {}
+        buy_near = 0.0
+        sell_near = 0.0
+
+        for price, qty in self.bids:
+            if price > 0 and qty > 0:
+                lots = qty / lot_sz
+                b_low = int(math.floor((price - 1e-6) / w) * w)
+                buy_bands[b_low] = buy_bands.get(b_low, 0.0) + lots
+                if (mid - price) <= near_win:
+                    buy_near += lots
+
+        for price, qty in self.asks:
+            if price > 0 and qty > 0:
+                lots = qty / lot_sz
+                s_low = int(math.floor(price / w) * w)
+                sell_bands[s_low] = sell_bands.get(s_low, 0.0) + lots
+                if (price - mid) <= near_win:
+                    sell_near += lots
+
+        # Update rolling median baselines ("usual" band lots, near depth, spread)
+        all_band_vals = [v for v in list(buy_bands.values()) + list(sell_bands.values()) if v > 0]
+        for v in all_band_vals:
+            self._band_lots_samples.append(v)
+
+        tot_near = buy_near + sell_near
+        if tot_near > 0:
+            self._near_depth_samples.append(tot_near)
+
+        cur_spread = round(self.best_ask - self.best_bid, 2) if (self.best_ask > 0 and self.best_bid > 0) else 0.0
+        if cur_spread > 0:
+            self._spread_samples.append(cur_spread)
+
+        usual_band_lots = (
+            float(statistics.median(self._band_lots_samples))
+            if self._band_lots_samples
+            else 10.0
+        )
+        usual_band_lots = max(1.0, usual_band_lots)
+
+        usual_near = (
+            float(statistics.median(self._near_depth_samples))
+            if self._near_depth_samples
+            else max(1.0, tot_near)
+        )
+        depth_pct_usual = int(round((tot_near / max(1.0, usual_near)) * 100.0)) if tot_near > 0 else 0
+
+        usual_spread = (
+            round(float(statistics.median(self._spread_samples)), 2)
+            if self._spread_samples
+            else cur_spread
+        )
+
+        # Lookup map for nearest option strike OI alignment
+        oi_map = {int(r["strike"]): r for r in self.option_rows if "strike" in r}
+        basis = float(self.spot_basis or 0.0)
+        time_label = now_ist().strftime("%H:%M:%S")
+
+        seen_keys: set[tuple[str, int]] = set()
+        items: list[dict] = []
+
+        def evaluate_side(side: str, bands_dict: dict[int, float]):
+            for b_low, lots in bands_dict.items():
+                b_high = b_low + w
+                mult = round(lots / usual_band_lots, 1)
+                key = (side, b_low)
+                already_resting = key in self._resting_walls
+
+                # Enter at >= 2.0x usual; stay active down to >= 1.8x usual (hysteresis)
+                if mult >= 2.0 or (already_resting and mult >= 1.8):
+                    seen_keys.add(key)
+                    if not already_resting:
+                        self._resting_walls[key] = {
+                            "since": now,
+                            "last_seen": now,
+                            "peak_lots": round(lots, 1),
+                            "band_high": b_high,
+                        }
+                        self._wall_events.appendleft({
+                            "time": time_label,
+                            "type": "APPEARED",
+                            "side": side,
+                            "range_label": f"{b_low:,}–{b_high:,}",
+                            "detail": f"{int(round(lots))} lots ({mult:.1f}× usual)",
+                        })
+                    else:
+                        rec = self._resting_walls[key]
+                        rec["last_seen"] = now
+                        rec["peak_lots"] = max(rec["peak_lots"], round(lots, 1))
+
+                    rec = self._resting_walls[key]
+                    rest_sec = max(1.0, now - rec["since"])
+
+                    if side == "SELL":
+                        dist = max(0.0, round(b_low - mid, 1))
+                        dist_label = f"{dist:.1f} pts above"
+                    else:
+                        dist = max(0.0, round(mid - b_high, 1))
+                        dist_label = f"{dist:.1f} pts below"
+
+                    band_mid = (b_low + b_high) / 2.0
+                    implied_spot = int(round(band_mid - basis))
+                    nearest_strike = int(round(implied_spot / strike_step) * strike_step)
+                    oi_row = oi_map.get(nearest_strike, {})
+
+                    items.append({
+                        "side": side,
+                        "band_low": b_low,
+                        "band_high": b_high,
+                        "range_label": f"{b_low:,}–{b_high:,}",
+                        "lots": int(round(lots)),
+                        "mult": mult,
+                        "mult_label": f"{mult:.1f}× usual",
+                        "distance": dist,
+                        "distance_label": dist_label,
+                        "resting_sec": int(round(rest_sec)),
+                        "resting_label": self._fmt_resting(rest_sec),
+                        "implied_spot": implied_spot,
+                        "nearest_strike": nearest_strike,
+                        "ce_oi_lots": oi_row.get("ce_oi_lots", 0),
+                        "pe_oi_lots": oi_row.get("pe_oi_lots", 0),
+                    })
+
+        evaluate_side("SELL", sell_bands)
+        evaluate_side("BUY", buy_bands)
+
+        # Expire walls unseen for > 8 seconds (grace window avoids false resets on 5-level depth)
+        expired_keys = [
+            k for k, rec in self._resting_walls.items()
+            if k not in seen_keys and (now - rec["last_seen"]) > 8.0
+        ]
+        for k in expired_keys:
+            rec = self._resting_walls.pop(k)
+            rested_for = rec["last_seen"] - rec["since"]
+            if rested_for >= 12.0:
+                side_k, b_low_k = k
+                b_high_k = rec.get("band_high", b_low_k + w)
+                self._wall_events.appendleft({
+                    "time": time_label,
+                    "type": "GONE",
+                    "side": side_k,
+                    "range_label": f"{b_low_k:,}–{b_high_k:,}",
+                    "detail": f"peak {int(round(rec['peak_lots']))} lots · after {self._fmt_resting(rested_for).replace('resting ', '')}",
+                })
+
+        # Sort nearest to current price first (exact match to screenshot!)
+        items.sort(key=lambda x: (x["distance"], -x["mult"]))
+
+        buyers_pct = int(round((buy_near / tot_near) * 100.0)) if tot_near > 0 else 50
+        sellers_pct = 100 - buyers_pct
+
+        self.big_orders_snapshot = {
+            "items": items,
+            "events": list(self._wall_events),
+            "near_window": near_win,
+            "big_band": w,
+            "depth_pct_usual": depth_pct_usual,
+            "spread": cur_spread,
+            "usual_spread": usual_spread,
+            "usual_band_lots": round(usual_band_lots, 1),
+            "buyers_pct": buyers_pct,
+            "sellers_pct": sellers_pct,
+            "buy_near_lots": int(round(buy_near)),
+            "sell_near_lots": int(round(sell_near)),
+            "spot_price": round(mid - basis, 2),
+            "basis": round(basis, 2),
+        }
+
+    # --------------------------------------------------------------------------
     # DEMO SIMULATOR (Runs when source == "demo")
     # --------------------------------------------------------------------------
     def _seed_demo_history(self):
@@ -435,52 +657,94 @@ class MarketScreenEngine:
         self.status_message = "Demo mode active (simulated live NIFTY order book & OI — no broker account needed)."
 
     def _refresh_demo_walls(self, center: float):
-        bs = max(1.0, round(self.band_size))
-        c = round(center)
+        defaults = SYMBOL_DEFAULTS.get(self.symbol, SYMBOL_DEFAULTS["NIFTY"])
+        w = int(defaults.get("big_band", 5))
+        c = int(round(center / w) * w)
+        now = time.time()
+        # Seed realistic multi-minute resting walls so Demo Mode looks authentic immediately
         self._demo_walls_buy = {
-            c - 4 * bs: random.randint(240, 420),
-            c - 9 * bs: random.randint(380, 620),
-            c - 15 * bs: random.randint(290, 520),
+            c - 2 * w: random.randint(180, 290),
+            c - 4 * w: random.randint(140, 240),
         }
         self._demo_walls_sell = {
-            c + 4 * bs: random.randint(250, 440),
-            c + 10 * bs: random.randint(390, 640),
-            c + 16 * bs: random.randint(280, 510),
+            c + 1 * w: random.randint(170, 260),
+            c + 2 * w: random.randint(85, 130),
+            c + 4 * w: random.randint(150, 240),
         }
+        # Pre-seed realistic resting ages on initial startup
+        if not self._resting_walls:
+            for bp, bl in self._demo_walls_buy.items():
+                self._resting_walls[("BUY", bp)] = {
+                    "since": now - random.randint(14, 480),
+                    "last_seen": now,
+                    "peak_lots": float(bl),
+                    "band_high": bp + w,
+                }
+            for sp, sl in self._demo_walls_sell.items():
+                self._resting_walls[("SELL", sp)] = {
+                    "since": now - random.randint(15, 900),
+                    "last_seen": now,
+                    "peak_lots": float(sl),
+                    "band_high": sp + w,
+                }
 
     def _tick_demo_book_locked(self):
         defaults = SYMBOL_DEFAULTS.get(self.symbol, SYMBOL_DEFAULTS["NIFTY"])
         lot_sz = defaults["lot_size"]
         step_scale = defaults.get("step_scale", 1.0)
+        w = int(defaults.get("big_band", 5))
 
         # Gentle wandering price with subtle bounce off resting walls
         drift = (defaults["base_price"] - self.mid_price) * 0.03
-        move = random.gauss(drift, 0.85 * step_scale)
+        move = random.gauss(drift, 0.75 * step_scale)
         self.mid_price = round(self.mid_price + move, 2)
-        half_spread = 0.25 if self.symbol == "NIFTY" else (1.0 if self.symbol == "SENSEX" else 0.50)
+        half_spread = random.choice([0.5, 1.0, 1.5]) * step_scale
         anchor = round(self.mid_price * 2) / 2.0
 
         self.best_bid = round(anchor - half_spread, 2)
         self.best_ask = round(anchor + half_spread, 2)
         self.ltp = round(random.choice([self.best_bid, self.best_ask, anchor]), 2)
+        self.spot_basis = float(defaults.get("demo_basis", 6.5))
+        self.spot_price = round(anchor - self.spot_basis, 2)
 
-        # Shift walls occasionally if price moves through them
-        if random.random() < 0.06 or not self._demo_walls_buy:
+        # Rotate only 1 wall rarely (~1.5% chance/sec) so most walls genuinely rest for minutes
+        if not self._demo_walls_buy:
             self._refresh_demo_walls(anchor)
+        elif random.random() < 0.015:
+            c = int(round(anchor / w) * w)
+            if random.random() < 0.5 and self._demo_walls_buy:
+                old_k = random.choice(list(self._demo_walls_buy.keys()))
+                self._demo_walls_buy.pop(old_k, None)
+                self._demo_walls_buy[c - random.choice([1, 2, 3, 5]) * w] = random.randint(150, 290)
+            elif self._demo_walls_sell:
+                old_k = random.choice(list(self._demo_walls_sell.keys()))
+                self._demo_walls_sell.pop(old_k, None)
+                self._demo_walls_sell[c + random.choice([1, 2, 3, 5]) * w] = random.randint(150, 290)
 
         bids = []
         asks = []
-        level_step = 0.5 if self.band_size <= 1.0 else max(1.0, self.band_size * 0.5)
-        # 20 levels on each side -> covers ~10-20 points each side
+        level_step = max(1.0, w / 4.0)
+        used_buy_walls = set()
+        used_sell_walls = set()
         for idx in range(DEMO_LEVELS):
             bp = round(self.best_bid - idx * level_step, 2)
             ap = round(self.best_ask + idx * level_step, 2)
 
-            b_wall = self._demo_walls_buy.get(math.floor(bp), 0)
-            s_wall = self._demo_walls_sell.get(math.ceil(ap), 0)
+            b_band = int(math.floor((bp - 1e-6) / w) * w)
+            s_band = int(math.floor(ap / w) * w)
 
-            b_lots = max(4, int(random.randint(12, 95) + b_wall * random.uniform(0.45, 0.62)))
-            s_lots = max(4, int(random.randint(12, 95) + s_wall * random.uniform(0.45, 0.62)))
+            b_extra = 0
+            if b_band in self._demo_walls_buy and b_band not in used_buy_walls:
+                used_buy_walls.add(b_band)
+                b_extra = int(self._demo_walls_buy[b_band] * random.uniform(0.92, 1.08))
+
+            s_extra = 0
+            if s_band in self._demo_walls_sell and s_band not in used_sell_walls:
+                used_sell_walls.add(s_band)
+                s_extra = int(self._demo_walls_sell[s_band] * random.uniform(0.92, 1.08))
+
+            b_lots = max(3, random.randint(6, 20) + b_extra)
+            s_lots = max(3, random.randint(6, 20) + s_extra)
 
             bids.append((bp, b_lots * lot_sz))
             asks.append((ap, s_lots * lot_sz))
@@ -495,6 +759,7 @@ class MarketScreenEngine:
         true_mid = round((self.best_bid + self.best_ask) / 2.0, 2)
         self.mid_price = true_mid
         self._update_candle_locked(true_mid)
+        self._update_big_orders_locked()
 
         if (time.time() - self.last_oi_ts) >= OI_REFRESH_SECONDS or not self.option_rows:
             self._generate_demo_oi_locked(initial=False)
@@ -833,6 +1098,7 @@ class MarketScreenEngine:
                 if bids or asks:
                     self.feed_levels = max(len(bids), len(asks), self.feed_levels)
                     self.last_book_ts = time.time()
+                    self._update_big_orders_locked()
         except Exception as exc:
             print(f"[Upstox] Initial quote snapshot skipped: {str(exc)[:120]}")
 
@@ -901,6 +1167,10 @@ class MarketScreenEngine:
                     break
 
             with self.lock:
+                if spot > 0 and self.session_id == sid:
+                    self.spot_price = round(spot, 2)
+                    if self.mid_price > 0:
+                        self.spot_basis = round(self.mid_price - spot, 2)
                 ref_price = self.mid_price if self.mid_price > 0 else spot
                 lot_sz = max(1, self.lot_size)
 
@@ -1051,6 +1321,7 @@ class MarketScreenEngine:
                         self.mid_price = mid
                         self._update_candle_locked(mid)
                     self.last_book_ts = time.time()
+                    self._update_big_orders_locked()
 
             def on_error(err):
                 err_str = str(err)
@@ -1154,6 +1425,9 @@ class MarketScreenEngine:
             chg_pct = round((chg / self.prev_close) * 100.0, 2) if self.prev_close else 0.0
             spread = round(self.best_ask - self.best_bid, 2) if (self.best_ask > 0 and self.best_bid > 0) else 0.0
             oi_age = int(max(0, time.time() - self.last_oi_ts)) if self.last_oi_ts else 0
+            book_age = int(max(0, time.time() - self.last_book_ts)) if self.last_book_ts else 0
+            big_orders_out = dict(self.big_orders_snapshot)
+            big_orders_out["updated_ago_sec"] = book_age
 
             return {
                 "server_time_ist": now_ist().strftime("%H:%M:%S IST"),
@@ -1175,12 +1449,14 @@ class MarketScreenEngine:
                 "rate_limit_note": UPSTOX_RATE_LIMIT_NOTE,
                 "ltp": self.ltp,
                 "mid_price": self.mid_price,
+                "spot_price": self.spot_price,
                 "best_bid": self.best_bid,
                 "best_ask": self.best_ask,
                 "spread": spread,
                 "change": chg,
                 "change_pct": chg_pct,
                 "book": ladder,
+                "big_orders": big_orders_out,
                 "candles": list(self.candles),
                 "option_chain": {
                     "rows": list(self.option_rows),

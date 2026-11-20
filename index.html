@@ -70,8 +70,8 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
-      padding: 7px 12px;
+      gap: 6px;
+      padding: 6px 10px;
       background: var(--bg-panel);
       border-bottom: 1px solid var(--border-subtle);
       flex-wrap: nowrap;
@@ -81,7 +81,7 @@
     .brand-group {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 7px;
       flex-wrap: nowrap;
       white-space: nowrap;
     }
@@ -89,26 +89,26 @@
     .contract-badge {
       display: flex;
       align-items: baseline;
-      gap: 7px;
+      gap: 6px;
       white-space: nowrap;
     }
 
     .contract-name {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 700;
       letter-spacing: 0.2px;
     }
 
     .price-big {
-      font-size: 20px;
+      font-size: 18.5px;
       font-weight: 800;
       letter-spacing: -0.3px;
     }
 
     .chg-pill {
-      font-size: 11.5px;
+      font-size: 11px;
       font-weight: 600;
-      padding: 2px 6px;
+      padding: 2px 5px;
       border-radius: 4px;
     }
     .chg-up { color: var(--buy-text); background: var(--buy-soft); }
@@ -117,16 +117,16 @@
     .meta-pills {
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 4px;
       flex-wrap: nowrap;
     }
 
     .pill {
-      font-size: 10.5px;
+      font-size: 10px;
       color: var(--text-secondary);
       background: var(--bg-panel-alt);
       border: 1px solid var(--border-subtle);
-      padding: 3px 6px;
+      padding: 3px 5px;
       border-radius: 5px;
       white-space: nowrap;
     }
@@ -151,7 +151,7 @@
     .controls {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       flex-wrap: nowrap;
       white-space: nowrap;
     }
@@ -168,8 +168,8 @@
       background: transparent;
       color: var(--text-secondary);
       border: none;
-      padding: 4px 7px;
-      font-size: 11px;
+      padding: 4px 6px;
+      font-size: 10.5px;
       font-weight: 600;
       cursor: pointer;
       transition: background 0.12s, color 0.12s;
@@ -187,8 +187,8 @@
       color: var(--text-secondary);
       border: 1px solid var(--border-subtle);
       border-radius: 6px;
-      padding: 4px 7px;
-      font-size: 11px;
+      padding: 4px 6px;
+      font-size: 10.5px;
       font-weight: 600;
       cursor: pointer;
     }
@@ -576,13 +576,242 @@
       font-weight: 800;
     }
 
+    /* Sleek dark scrollbars (no bright white Windows scrollbars) */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.24); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.42); }
+
+    /* Tab Switcher Accent */
+    .tab-group {
+      display: inline-flex;
+      background: var(--bg-panel-alt);
+      border: 1px solid rgba(16, 185, 129, 0.45);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .tab-btn {
+      background: transparent;
+      color: var(--text-secondary);
+      border: none;
+      padding: 4px 9px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+    }
+    .tab-btn:hover { color: var(--text-primary); }
+    .tab-btn.active {
+      background: #10b981;
+      color: #052016;
+    }
+
+    /* ========================================================================
+       TAB 2: "BIG ORDERS RIGHT NOW" (Exact match to reference card + context)
+       ======================================================================== */
+    .workspace.hidden-tab {
+      display: none;
+    }
+    .big-workspace {
+      grid-template-columns: 390px 1.25fr 1fr;
+    }
+
+    .bo-card-shell {
+      background: #0d1117;
+      border: 1px solid #222b38;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+      color: #e6edf3;
+    }
+    html[data-theme="light"] .bo-card-shell {
+      background: #ffffff;
+      border-color: #cbd5e1;
+      color: #0f172a;
+    }
+
+    .bo-head {
+      padding: 14px 16px 11px;
+      border-bottom: 1px solid #1f2733;
+    }
+    html[data-theme="light"] .bo-head { border-bottom-color: #e2e8f0; }
+
+    .bo-head-top {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .bo-title {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: -0.2px;
+    }
+    .bo-updated {
+      font-size: 12px;
+      color: #8b949e;
+    }
+    .bo-sub {
+      font-size: 12px;
+      color: #7d8590;
+      margin-top: 3px;
+    }
+
+    .bo-list {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
+    }
+
+    .bo-item {
+      padding: 13px 16px;
+      border-bottom: 1px solid #1b222d;
+    }
+    html[data-theme="light"] .bo-item { border-bottom-color: #e2e8f0; }
+
+    .bo-row1, .bo-row2 {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .bo-side-label {
+      font-size: 11.5px;
+      font-weight: 700;
+      letter-spacing: 0.65px;
+      text-transform: uppercase;
+    }
+    .bo-mult {
+      font-size: 12.5px;
+      font-weight: 700;
+    }
+    .bo-sell-col { color: #ef5350; }
+    .bo-buy-col  { color: #2dd4bf; }
+    html[data-theme="light"] .bo-buy-col { color: #059669; }
+    html[data-theme="light"] .bo-sell-col { color: #dc2626; }
+
+    .bo-row2 { margin-top: 3px; }
+    .bo-range {
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: -0.35px;
+    }
+    .bo-dist {
+      font-size: 12.5px;
+      color: #94a3b8;
+    }
+
+    .bo-row3 {
+      margin-top: 6px;
+      font-size: 13px;
+      color: #c9d1d9;
+      font-weight: 500;
+    }
+    html[data-theme="light"] .bo-row3 { color: #334155; }
+
+    .bo-row4 {
+      margin-top: 3px;
+      font-size: 12px;
+      color: #6e7681;
+    }
+
+    .bo-empty {
+      padding: 32px 18px;
+      text-align: center;
+      font-size: 12.5px;
+      color: #7d8590;
+      line-height: 1.55;
+    }
+
+    .bo-footer {
+      padding: 12px 16px 14px;
+      border-top: 1px solid #222b38;
+      background: rgba(13, 17, 23, 0.96);
+    }
+    html[data-theme="light"] .bo-footer {
+      background: #f8fafc;
+      border-top-color: #cbd5e1;
+    }
+
+    .bo-stat-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      font-size: 12.5px;
+      margin-bottom: 7px;
+    }
+    .bo-stat-lbl { color: #8b949e; }
+    .bo-stat-val { font-weight: 700; }
+
+    .bo-tug-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12.5px;
+      font-weight: 600;
+      margin-top: 4px;
+      margin-bottom: 6px;
+    }
+    .bo-tug-bar {
+      height: 7px;
+      border-radius: 4px;
+      background: #ef5350;
+      overflow: hidden;
+      display: flex;
+    }
+    .bo-tug-buy {
+      height: 100%;
+      background: #26a69a;
+      transition: width 0.2s ease;
+    }
+    .bo-disclaimer {
+      margin-top: 9px;
+      font-size: 11.5px;
+      color: #6e7681;
+      line-height: 1.38;
+    }
+
+    /* Right Panel of Big Orders Tab (Confluence + Activity Feed) */
+    .conf-section {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .conf-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 9px;
+      border-radius: 6px;
+      background: var(--bg-panel-alt);
+      border: 1px solid var(--border-subtle);
+      margin-bottom: 6px;
+      font-size: 11.5px;
+    }
+    .event-list {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 8px 12px;
+    }
+    .event-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.07);
+      font-size: 11.5px;
+    }
+
     @media (max-width: 1080px) {
       body { overflow: auto; height: auto; }
       .workspace {
         grid-template-columns: 1fr;
         height: auto;
       }
-      .panel { height: 520px; }
+      .panel, .bo-card-shell { height: 540px; }
     }
   </style>
 </head>
@@ -600,21 +829,27 @@
       <div class="meta-pills">
         <span class="pill" id="connPill">
           <span class="status-dot dot-green" id="connDot"></span>
-          <strong id="connLabel">Demo Active</strong>
+          <strong id="connLabel">Demo</strong>
         </span>
-        <span class="pill">Mid: <strong id="midDisplay">25,000.00</strong></span>
-        <span class="pill">Spread: <strong id="spreadDisplay">0.50</strong></span>
-        <span class="pill">Lot: <strong id="lotDisplay">65</strong></span>
-        <span class="pill">Depth: <strong id="levelsDisplay">20 lvls</strong></span>
-        <span class="pill" id="clockPill">00:00:00 IST</span>
+        <span class="pill">Mid <strong id="midDisplay">25,000.00</strong></span>
+        <span class="pill">Sprd <strong id="spreadDisplay">0.50</strong></span>
+        <span class="pill">Lot <strong id="lotDisplay">65</strong></span>
+        <span class="pill"><strong id="levelsDisplay">20 lvls</strong></span>
+        <span class="pill" id="clockPill">00:00:00</span>
       </div>
     </div>
 
     <div class="controls">
+      <!-- Screen Tab Switcher -->
+      <div class="tab-group" title="Switch between Order Book screen and Big Orders right now">
+        <button class="tab-btn active" id="btnTabBook" onclick="switchTab('book')">Order Book</button>
+        <button class="tab-btn" id="btnTabBig" onclick="switchTab('big')">Big Orders</button>
+      </div>
+
       <!-- Data Source Switch -->
       <div class="seg-group" title="Switch between simulated Demo data and live Upstox Analytics Token">
         <button class="seg-btn active" id="btnSourceDemo" onclick="setControl({source:'demo'})">Demo</button>
-        <button class="seg-btn" id="btnSourceUpstox" onclick="setControl({source:'upstox'})">Upstox Live</button>
+        <button class="seg-btn" id="btnSourceUpstox" onclick="setControl({source:'upstox'})">Upstox</button>
       </div>
 
       <!-- Symbol Switch -->
@@ -626,15 +861,15 @@
 
       <!-- Band Size -->
       <div class="seg-group" title="Order book price band grouping size">
-        <button class="seg-btn active" id="btnBand1" onclick="setControl({band_size:1})">1 pt</button>
-        <button class="seg-btn" id="btnBand2" onclick="setControl({band_size:2})">2 pt</button>
-        <button class="seg-btn" id="btnBand5" onclick="setControl({band_size:5})">5 pt</button>
+        <button class="seg-btn" id="btnBand1" onclick="setControl({band_size:1})">1</button>
+        <button class="seg-btn" id="btnBand2" onclick="setControl({band_size:2})">2</button>
+        <button class="seg-btn active" id="btnBand5" onclick="setControl({band_size:5})">5</button>
         <button class="seg-btn" id="btnBand10" onclick="setControl({band_size:10})">10 pt</button>
       </div>
 
       <!-- Price Scale Sync Toggle -->
       <button class="action-btn active" id="btnScaleSync" onclick="toggleScaleSync()" title="Keep 1-min candles on the exact same vertical price scale as the order book">
-        Scale: Synced
+        Synced
       </button>
 
       <!-- Sound Alert Toggle (>500 lots within 10 pts) -->
@@ -658,8 +893,8 @@
     </div>
   </div>
 
-  <!-- MAIN 3-PANEL SCREEN -->
-  <main class="workspace">
+  <!-- TAB 1: MAIN 3-PANEL ORDER BOOK SCREEN -->
+  <main class="workspace" id="tabOrderBook">
 
     <!-- 1. LEFT: 1-MINUTE CANDLES (Synced on exact same price scale as Order Book) -->
     <section class="panel">
@@ -747,6 +982,74 @@
 
   </main>
 
+  <!-- TAB 2: BIG ORDERS RIGHT NOW SCREEN -->
+  <main class="workspace big-workspace hidden-tab" id="tabBigOrders">
+
+    <!-- 1. LEFT CARD: Exact "Big orders right now" Reference Design -->
+    <section class="bo-card-shell">
+      <div class="bo-head">
+        <div class="bo-head-top">
+          <span class="bo-title">Big orders right now</span>
+          <span class="bo-updated" id="boUpdatedAgo">Updated 0s ago</span>
+        </div>
+        <div class="bo-sub">Nearest first · at least twice the usual size</div>
+      </div>
+
+      <div class="bo-list" id="boList"></div>
+
+      <div class="bo-footer">
+        <div class="bo-stat-row">
+          <span class="bo-stat-lbl" id="boDepthLbl">Depth within 20 pts</span>
+          <span class="bo-stat-val" id="boDepthVal">100% of usual</span>
+        </div>
+        <div class="bo-stat-row">
+          <span class="bo-stat-lbl">Spread</span>
+          <span class="bo-stat-val" id="boSpreadVal">0.50 pts · usual 0.50</span>
+        </div>
+        <div class="bo-tug-labels">
+          <span class="bo-buy-col" id="boBuyersPct">Buyers 50%</span>
+          <span class="bo-sell-col" id="boSellersPct">Sellers 50%</span>
+        </div>
+        <div class="bo-tug-bar">
+          <div class="bo-tug-buy" id="boTugFill" style="width:50%"></div>
+        </div>
+        <div class="bo-disclaimer" id="boDisclaimer">
+          Lots resting within 20 pts. They can be cancelled. Context, not a direction.
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. CENTER PANEL: 1-Minute Candles with Resting Wall Zones Overlaid -->
+    <section class="panel">
+      <div class="panel-header">
+        <span>1-Minute Price &amp; Resting Wall Zones</span>
+        <span class="panel-sub" id="boZoneMeta">Shaded bands = active ≥2× resting orders</span>
+      </div>
+      <div class="sync-body">
+        <canvas id="boZoneCanvas"></canvas>
+      </div>
+      <div class="sync-footer">
+        <span id="boBasisLabel">Spot ≈ — | Basis: —</span>
+        <span id="boUsualBandLabel">Usual band ≈ — lots</span>
+      </div>
+    </section>
+
+    <!-- 3. RIGHT PANEL: Strike OI Alignment & Resting Wall Log -->
+    <section class="panel">
+      <div class="panel-header">
+        <span>Strike OI Alignment &amp; Wall Activity</span>
+        <span class="panel-sub">Futures wall vs Option OI</span>
+      </div>
+      <div class="conf-section" id="boConfluenceList"></div>
+      <div class="panel-header" style="border-top:1px solid var(--border-subtle);">
+        <span>Recent Wall Log (Appeared / Pulled)</span>
+        <span class="panel-sub">Session tracker</span>
+      </div>
+      <div class="event-list" id="boEventList"></div>
+    </section>
+
+  </main>
+
   <script>
     // ========================================================================
     // FRONTEND SETTINGS (Top of script, 1-line comment per setting)
@@ -759,6 +1062,7 @@
     const MID_LINE_COLOR = "#f59e0b";       // Dashed current mid-price horizontal guide colour
 
     let latestState = null;
+    let activeTab = "book";                 // "book" = Order Book screen, "big" = Big Orders right now
     let syncPriceScale = true;
     let soundEnabled = false;
     let audioCtx = null;
@@ -802,11 +1106,20 @@
       }
     }
 
+    function switchTab(tab) {
+      activeTab = tab === "big" ? "big" : "book";
+      document.getElementById("btnTabBook").classList.toggle("active", activeTab === "book");
+      document.getElementById("btnTabBig").classList.toggle("active", activeTab === "big");
+      document.getElementById("tabOrderBook").classList.toggle("hidden-tab", activeTab !== "book");
+      document.getElementById("tabBigOrders").classList.toggle("hidden-tab", activeTab !== "big");
+      if (latestState) renderAll(latestState);
+    }
+
     function toggleScaleSync() {
       syncPriceScale = !syncPriceScale;
       const btn = document.getElementById("btnScaleSync");
       btn.classList.toggle("active", syncPriceScale);
-      btn.textContent = syncPriceScale ? "Scale: Synced" : "Scale: Full Chart";
+      btn.textContent = syncPriceScale ? "Synced" : "Full Chart";
       if (latestState) renderAll(latestState);
     }
 
@@ -996,13 +1309,23 @@
         depthBtn.style.display = "none";
       }
 
-      // 2. Unified Price Ladder + Candles
-      const displayLadder = computeDisplayLadder(state);
-      renderOrderBook(state, displayLadder);
-      drawCandles(state, displayLadder);
+      // Update Big Orders tab count badge live even when viewing Order Book tab
+      const boCount = ((state.big_orders && state.big_orders.items) || []).length;
+      document.getElementById("btnTabBig").textContent = boCount > 0 ? `Big Orders (${boCount})` : "Big Orders";
 
-      // 3. Option Open Interest
-      renderOptionChain(state);
+      if (activeTab === "book") {
+        // 2. Unified Price Ladder + Candles
+        const displayLadder = computeDisplayLadder(state);
+        renderOrderBook(state, displayLadder);
+        drawCandles(state, displayLadder);
+
+        // 3. Option Open Interest
+        renderOptionChain(state);
+      } else {
+        // Tab 2: Big Orders Right Now + Resting Wall Zones + Strike Confluence
+        renderBigOrders(state);
+        drawBigOrderZones(state);
+      }
 
       // 4. Optional sound alert
       maybeBeepForLargeWall(state);
@@ -1276,8 +1599,249 @@
       }
     }
 
+    function renderBigOrders(state) {
+      const bo = state.big_orders || {};
+      const items = bo.items || [];
+      const events = bo.events || [];
+      const nearWin = bo.near_window || 20;
+      const age = Number(bo.updated_ago_sec || 0);
+
+      document.getElementById("boUpdatedAgo").textContent = `Updated ${age}s ago`;
+      document.getElementById("boDepthLbl").textContent = `Depth within ${nearWin} pts`;
+      document.getElementById("boDepthVal").textContent = `${bo.depth_pct_usual ?? 100}% of usual`;
+      document.getElementById("boSpreadVal").textContent =
+        `${fmtPrice(bo.spread)} pts · usual ${fmtPrice(bo.usual_spread)}`;
+      document.getElementById("boBuyersPct").textContent = `Buyers ${bo.buyers_pct ?? 50}%`;
+      document.getElementById("boSellersPct").textContent = `Sellers ${bo.sellers_pct ?? 50}%`;
+      document.getElementById("boTugFill").style.width = `${bo.buyers_pct ?? 50}%`;
+      document.getElementById("boDisclaimer").textContent =
+        `Lots resting within ${nearWin} pts. They can be cancelled. Context, not a direction.`;
+
+      const basisSign = (bo.basis || 0) >= 0 ? "+" : "";
+      document.getElementById("boBasisLabel").textContent =
+        `Spot ≈ ${fmtInt(bo.spot_price || state.mid_price)}  |  Fut Basis: ${basisSign}${Number(bo.basis || 0).toFixed(1)} pts`;
+      document.getElementById("boUsualBandLabel").textContent =
+        `Usual ${bo.big_band || 5}-pt band ≈ ${bo.usual_band_lots || "—"} lots`;
+
+      const listEl = document.getElementById("boList");
+      if (!items.length) {
+        listEl.innerHTML = `<div class="bo-empty">
+          No band currently holds ≥ 2× the usual size (${bo.usual_band_lots || "—"} lots).<br>
+          Watching live ${state.contract_name || state.symbol} order book...
+        </div>`;
+      } else {
+        listEl.innerHTML = items.map((it) => {
+          const isSell = it.side === "SELL";
+          const colCls = isSell ? "bo-sell-col" : "bo-buy-col";
+          const sideTitle = isSell ? "SELL ORDERS" : "BUY ORDERS";
+          const rangeText = `${fmtInt(it.band_low)}–${fmtInt(it.band_high)}`;
+
+          return `<div class="bo-item">
+            <div class="bo-row1">
+              <span class="bo-side-label ${colCls}">${sideTitle}</span>
+              <span class="bo-mult ${colCls}">${it.mult_label}</span>
+            </div>
+            <div class="bo-row2">
+              <span class="bo-range">${rangeText}</span>
+              <span class="bo-dist">${it.distance_label}</span>
+            </div>
+            <div class="bo-row3">${fmtInt(it.lots)} lots · ${it.resting_label}</div>
+            <div class="bo-row4">Spot ≈ ${fmtInt(it.implied_spot)} · ${fmtInt(it.nearest_strike)} strike</div>
+          </div>`;
+        }).join("");
+      }
+
+      // Right Panel Top: Strike OI Alignment for active Big Orders
+      const confEl = document.getElementById("boConfluenceList");
+      const oiSummary = (state.option_chain && state.option_chain.summary) || {};
+      if (!items.length) {
+        confEl.innerHTML = `<div style="font-size:11.5px; color:var(--text-muted); padding:6px 2px;">
+          Active big orders will map automatically to their nearest Option Strike OI here.
+        </div>`;
+      } else {
+        confEl.innerHTML = items.slice(0, 5).map((it) => {
+          const isSell = it.side === "SELL";
+          const colCls = isSell ? "bo-sell-col" : "bo-buy-col";
+          const isMaxWall = isSell
+            ? (it.nearest_strike === oiSummary.max_ce_strike)
+            : (it.nearest_strike === oiSummary.max_pe_strike);
+          const tag = isMaxWall
+            ? `<span style="color:#f59e0b; font-weight:800; margin-left:6px;">★ Max OI Wall</span>`
+            : "";
+          const ceStr = it.ce_oi_lots ? `CE: ${fmtInt(it.ce_oi_lots)}` : "CE: —";
+          const peStr = it.pe_oi_lots ? `PE: ${fmtInt(it.pe_oi_lots)}` : "PE: —";
+
+          return `<div class="conf-row">
+            <div>
+              <strong class="${colCls}">${it.side}</strong>
+              <strong style="margin-left:4px;">${fmtInt(it.band_low)}–${fmtInt(it.band_high)}</strong>
+              <span style="color:var(--text-muted); margin-left:5px;">&rarr; ${fmtInt(it.nearest_strike)} strike</span>
+              ${tag}
+            </div>
+            <div style="color:var(--text-secondary); font-weight:600;">${ceStr} | ${peStr}</div>
+          </div>`;
+        }).join("");
+      }
+
+      // Right Panel Bottom: Recent Wall Appeared / Pulled Log
+      const evEl = document.getElementById("boEventList");
+      if (!events.length) {
+        evEl.innerHTML = `<div style="font-size:11.5px; color:var(--text-muted); padding:10px 0;">
+          Listening for new ≥2× resting walls appearing or being pulled...
+        </div>`;
+      } else {
+        evEl.innerHTML = events.map((ev) => {
+          const isSell = ev.side === "SELL";
+          const colCls = isSell ? "bo-sell-col" : "bo-buy-col";
+          const badge = ev.type === "APPEARED" ? "NEW" : "GONE";
+          const badgeCol = ev.type === "APPEARED" ? "color:var(--text-primary);" : "color:var(--text-muted);";
+          return `<div class="event-row">
+            <div>
+              <span style="color:var(--text-muted); margin-right:5px;">${ev.time}</span>
+              <strong style="${badgeCol}">${badge}</strong>
+              <strong class="${colCls}" style="margin-left:4px;">${ev.side} ${ev.range_label}</strong>
+            </div>
+            <div style="color:var(--text-secondary);">${ev.detail}</div>
+          </div>`;
+        }).join("");
+      }
+    }
+
+    function drawBigOrderZones(state) {
+      const canvas = document.getElementById("boZoneCanvas");
+      if (!canvas || !canvas.parentElement) return;
+      const rect = canvas.parentElement.getBoundingClientRect();
+      if (rect.width < 10 || rect.height < 10) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(rect.width * dpr);
+      canvas.height = Math.floor(rect.height * dpr);
+
+      const ctx = canvas.getContext("2d");
+      ctx.scale(dpr, dpr);
+
+      const W = rect.width;
+      const H = rect.height;
+      ctx.clearRect(0, 0, W, H);
+
+      const styles = getComputedStyle(document.documentElement);
+      const borderCol = styles.getPropertyValue("--border-subtle").trim() || "#1f2b3e";
+      const mutedCol = styles.getPropertyValue("--text-muted").trim() || "#64748b";
+
+      const candles = (state.candles || []).slice(-35);
+      const items = ((state.big_orders && state.big_orders.items) || []);
+      const mid = Number(state.mid_price || 25000);
+
+      let highP = mid + 20;
+      let lowP = mid - 20;
+      if (candles.length) {
+        const latestTs = candles[candles.length - 1].time;
+        const sessionCandles = candles.filter((c) => (latestTs - c.time) <= 3600);
+        const pool = sessionCandles.length ? sessionCandles : candles.slice(-15);
+        highP = Math.max(...pool.map((c) => c.high), mid + 10);
+        lowP = Math.min(...pool.map((c) => c.low), mid - 10);
+      }
+      for (const it of items) {
+        if (it.band_high > highP) highP = it.band_high;
+        if (it.band_low < lowP) lowP = it.band_low;
+      }
+      const pad = Math.max(4, (highP - lowP) * 0.12);
+      highP += pad;
+      lowP -= pad;
+
+      const span = Math.max(1, highP - lowP);
+      const yOf = (p) => ((highP - p) / span) * H;
+
+      // Grid lines
+      ctx.strokeStyle = borderCol;
+      ctx.lineWidth = 0.6;
+      ctx.fillStyle = mutedCol;
+      ctx.font = "10px -apple-system, BlinkMacSystemFont, sans-serif";
+      const step = state.symbol === "SENSEX" ? 25 : (state.symbol === "BANKNIFTY" ? 15 : 5);
+      const firstGrid = Math.ceil(lowP / step) * step;
+      for (let gp = firstGrid; gp <= highP; gp += step) {
+        const y = yOf(gp);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(W, y);
+        ctx.stroke();
+        ctx.fillText(gp.toLocaleString("en-IN"), 6, Math.max(10, y - 3));
+      }
+
+      const leftPad = 52;
+      const rightPad = 12;
+
+      // 1. Draw shaded horizontal Resting Wall Zones first (behind candles)
+      for (const it of items) {
+        const yTop = yOf(it.band_high);
+        const yBot = yOf(it.band_low);
+        const bandH = Math.max(4, yBot - yTop);
+        const isSell = it.side === "SELL";
+
+        ctx.fillStyle = isSell ? "rgba(239, 83, 80, 0.18)" : "rgba(45, 212, 191, 0.17)";
+        ctx.fillRect(leftPad, yTop, W - leftPad - rightPad, bandH);
+
+        ctx.strokeStyle = isSell ? "rgba(239, 83, 80, 0.65)" : "rgba(45, 212, 191, 0.65)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(leftPad, yTop, W - leftPad - rightPad, bandH);
+
+        ctx.fillStyle = isSell ? "#f87171" : "#2dd4bf";
+        ctx.font = "bold 10.5px -apple-system, BlinkMacSystemFont, sans-serif";
+        const tagText = `${it.side} ${fmtInt(it.band_low)}–${fmtInt(it.band_high)} · ${fmtInt(it.lots)}L (${it.mult_label}) · ${it.resting_label}`;
+        ctx.fillText(tagText, leftPad + 6, Math.min(H - 4, yTop + Math.max(11, bandH * 0.68)));
+      }
+
+      // 2. Draw 1-minute candles
+      if (candles.length) {
+        const plotW = Math.max(40, W - leftPad - rightPad);
+        const slotW = plotW / Math.max(15, candles.length);
+        const bodyW = Math.max(3, Math.min(12, slotW * 0.65));
+
+        candles.forEach((c, idx) => {
+          const cx = leftPad + idx * slotW + slotW * 0.5;
+          const yO = yOf(c.open);
+          const yC = yOf(c.close);
+          const yH = yOf(c.high);
+          const yL = yOf(c.low);
+          const isUp = c.close >= c.open;
+          const col = isUp ? CANDLE_UP_COLOR : CANDLE_DOWN_COLOR;
+
+          ctx.strokeStyle = col;
+          ctx.lineWidth = 1.3;
+          ctx.beginPath();
+          ctx.moveTo(cx, yH);
+          ctx.lineTo(cx, yL);
+          ctx.stroke();
+
+          const topY = Math.min(yO, yC);
+          const bh = Math.max(1.8, Math.abs(yC - yO));
+          ctx.fillStyle = col;
+          ctx.fillRect(cx - bodyW / 2, topY, bodyW, bh);
+        });
+      }
+
+      // 3. Dashed Mid-Price Line
+      const midY = yOf(mid);
+      if (midY >= 0 && midY <= H) {
+        ctx.save();
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = MID_LINE_COLOR;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(0, midY);
+        ctx.lineTo(W, midY);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
     window.addEventListener("resize", () => {
-      if (latestState) drawCandles(latestState, computeDisplayLadder(latestState));
+      if (!latestState) return;
+      if (activeTab === "book") {
+        drawCandles(latestState, computeDisplayLadder(latestState));
+      } else {
+        drawBigOrderZones(latestState);
+      }
     });
 
     fetchState();
