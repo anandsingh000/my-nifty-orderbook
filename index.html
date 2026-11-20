@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NIFTY Order Book &amp; Option OI Screen</title>
+  <style>
+    /* ========================================================================
+       COLOR & VISUAL SETTINGS (Top of file, 1-line comment per setting)
+       ======================================================================== */
+    :root {
+      --bg-app: #0b0f17;                 /* Main screen background colour (dark mode) */
+      --bg-panel: #111826;               /* Card / panel background colour */
+      --bg-panel-alt: #162032;           /* Header and subtle row hover background */
+      --border-subtle: #1f2b3e;          /* Panel divider border colour */
+      --text-primary: #e6edf7;           /* Main price and numbers text colour */
+      --text-secondary: #93a4bd;         /* Labels and secondary info colour */
+      --text-muted: #5d708c;             /* Muted axis ticks and helper text */
+      --buy-solid: #10b981;              /* Solid green bar for top 3 largest buy bands */
+      --buy-soft: rgba(16, 185, 129, 0.22); /* Soft green bar for normal waiting buy bands */
+      --buy-text: #34d399;               /* Buy numbers text colour */
+      --sell-solid: #ef4444;             /* Solid red bar for top 3 largest sell bands */
+      --sell-soft: rgba(239, 68, 68, 0.22); /* Soft red bar for normal waiting sell bands */
+      --sell-text: #f87171;              /* Sell numbers text colour */
+      --accent-blue: #3b82f6;            /* Active button & ATM strike highlight colour */
+      --accent-amber: #f59e0b;           /* Mid-price marker & warning banner colour */
+      --row-atm: rgba(59, 130, 246, 0.16); /* ATM option strike row highlight */
+      --row-mid: rgba(245, 158, 11, 0.15); /* Current price row highlight in ladder */
+    }
+
+    html[data-theme="light"] {
+      --bg-app: #f1f5f9;
+      --bg-panel: #ffffff;
+      --bg-panel-alt: #f8fafc;
+      --border-subtle: #cbd5e1;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #64748b;
+      --buy-solid: #059669;
+      --buy-soft: rgba(5, 150, 105, 0.20);
+      --buy-text: #047857;
+      --sell-solid: #dc2626;
+      --sell-soft: rgba(220, 38, 38, 0.18);
+      --sell-text: #b91c1c;
+      --accent-blue: #2563eb;
+      --accent-amber: #d97706;
+      --row-atm: rgba(37, 99, 235, 0.11);
+      --row-mid: rgba(217, 119, 6, 0.13);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      background: var(--bg-app);
+      color: var(--text-primary);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Top Bar */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 14px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border-subtle);
+      flex-wrap: wrap;
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .contract-badge {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .contract-name {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+
+    .price-big {
+      font-size: 21px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+    }
+
+    .chg-pill {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+    }
+    .chg-up { color: var(--buy-text); background: var(--buy-soft); }
+    .chg-dn { color: var(--sell-text); background: var(--sell-soft); }
+
+    .meta-pills {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      font-size: 11px;
+      color: var(--text-secondary);
+      background: var(--bg-panel-alt);
+      border: 1px solid var(--border-subtle);
+      padding: 3px 8px;
+      border-radius: 5px;
+      white-space: nowrap;
+    }
+
+    .pill strong {
+      color: var(--text-primary);
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      margin-right: 5px;
+      vertical-align: middle;
+    }
+    .dot-green { background: #10b981; box-shadow: 0 0 6px #10b981; }
+    .dot-amber { background: #f59e0b; box-shadow: 0 0 6px #f59e0b; }
+    .dot-red   { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .seg-group {
+      display: inline-flex;
+      background: var(--bg-panel-alt);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .seg-btn {
+      background: transparent;
+      color: var(--text-secondary);
+      border: none;
+      padding: 4px 9px;
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+    }
+    .seg-btn:hover {
+      color: var(--text-primary);
+    }
+    .seg-btn.active {
+      background: var(--accent-blue);
+      color: #ffffff;
+    }
+
+    .action-btn {
+      background: var(--bg-panel-alt);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 4px 9px;
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .action-btn.active {
+      border-color: var(--accent-amber);
+      color: var(--accent-amber);
+    }
+
+    /* Notice / Token Help Banner */
+    .banner {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 7px 14px;
+      font-size: 12px;
+      background: rgba(245, 158, 11, 0.14);
+      border-bottom: 1px solid rgba(245, 158, 11, 0.38);
+      color: var(--text-primary);
+    }
+    .banner.error {
+      background: rgba(239, 68, 68, 0.15);
+      border-bottom-color: rgba(239, 68, 68, 0.45);
+    }
+    .banner.visible {
+      display: flex;
+    }
+    .banner-btn {
+      background: var(--accent-amber);
+      color: #0b0f17;
+      border: none;
+      border-radius: 5px;
+      padding: 4px 10px;
+      font-size: 11.5px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    /* Main 3-Column Grid */
+    .workspace {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1.15fr 1.15fr 1.1fr;
+      gap: 8px;
+      padding: 8px;
+    }
+
+    .panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 11px;
+      background: var(--bg-panel-alt);
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 12px;
+      font-weight: 700;
+      min-height: 35px;
+    }
+
+    .panel-sub {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    /* Sub-header summary strip (exact same height on Candles + Order Book so Y-axis aligns!) */
+    .sync-subheader {
+      height: 34px;
+      min-height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 11px;
+      color: var(--text-secondary);
+      gap: 8px;
+    }
+
+    /* Shared-height plot body for Candles & Order Book */
+    .sync-body {
+      flex: 1;
+      min-height: 0;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sync-footer {
+      height: 26px;
+      min-height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+      border-top: 1px solid var(--border-subtle);
+      font-size: 11px;
+      color: var(--text-muted);
+      background: var(--bg-panel-alt);
+    }
+
+    /* Candle Canvas */
+    #candleCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Order Book Imbalance Strip */
+    .imbalance-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .imbalance-bar {
+      flex: 1;
+      height: 6px;
+      background: var(--sell-soft);
+      border-radius: 3px;
+      overflow: hidden;
+      display: flex;
+    }
+    .imbalance-buy {
+      background: var(--buy-solid);
+      height: 100%;
+      transition: width 0.2s ease;
+    }
+
+    /* Order Book Ladder Rows */
+    .book-ladder {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .book-row {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1fr 78px 1fr;
+      align-items: center;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.05);
+      font-size: 11.5px;
+      line-height: 1;
+    }
+    .book-row.is-mid {
+      background: var(--row-mid);
+    }
+
+    .book-side {
+      height: 100%;
+      position: relative;
+      display: flex;
+      align-items: center;
+      padding: 0 6px;
+      overflow: hidden;
+    }
+    .book-side.buy {
+      justify-content: flex-end;
+    }
+    .book-side.sell {
+      justify-content: flex-start;
+    }
+
+    .depth-bar {
+      position: absolute;
+      top: 1px;
+      bottom: 1px;
+      border-radius: 2px;
+      transition: width 0.16s ease;
+    }
+    .book-side.buy .depth-bar {
+      right: 0;
+      background: var(--buy-soft);
+    }
+    .book-side.buy .depth-bar.solid {
+      background: var(--buy-solid);
+    }
+    .book-side.sell .depth-bar {
+      left: 0;
+      background: var(--sell-soft);
+    }
+    .book-side.sell .depth-bar.solid {
+      background: var(--sell-solid);
+    }
+
+    .lot-label {
+      position: relative;
+      z-index: 1;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+    .lot-label.solid-label {
+      font-weight: 800;
+      color: #ffffff;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+    }
+    html[data-theme="light"] .lot-label.solid-label {
+      color: #0f172a;
+      text-shadow: 0 0 4px rgba(255, 255, 255, 0.85);
+    }
+
+    .rank-tag {
+      font-size: 9.5px;
+      font-weight: 800;
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: rgba(0, 0, 0, 0.45);
+      color: #ffffff;
+    }
+
+    .price-cell {
+      text-align: center;
+      font-weight: 700;
+      font-size: 11.5px;
+      color: var(--text-primary);
+      border-left: 1px solid var(--border-subtle);
+      border-right: 1px solid var(--border-subtle);
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .book-row.is-mid .price-cell {
+      color: var(--accent-amber);
+      font-weight: 800;
+    }
+
+    /* Option OI Right Panel */
+    .oi-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      padding: 7px 9px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .oi-card {
+      background: var(--bg-panel-alt);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 5px 8px;
+    }
+    .oi-card-title {
+      font-size: 10px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .oi-card-val {
+      font-size: 13.5px;
+      font-weight: 800;
+      margin-top: 2px;
+    }
+    .oi-card-sub {
+      font-size: 10.5px;
+      color: var(--text-muted);
+    }
+
+    .oi-table-head {
+      display: grid;
+      grid-template-columns: 58px 1fr 66px 1fr 58px;
+      padding: 5px 8px;
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      background: var(--bg-panel-alt);
+      border-bottom: 1px solid var(--border-subtle);
+      text-align: center;
+    }
+
+    .oi-table-body {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+    }
+
+    .oi-row {
+      display: grid;
+      grid-template-columns: 58px 1fr 66px 1fr 58px;
+      align-items: center;
+      min-height: 25px;
+      padding: 1px 8px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+      font-size: 11px;
+    }
+    .oi-row.atm {
+      background: var(--row-atm);
+      border-top: 1px solid rgba(59, 130, 246, 0.45);
+      border-bottom: 1px solid rgba(59, 130, 246, 0.45);
+    }
+
+    .oi-chg {
+      font-size: 10.5px;
+      font-weight: 600;
+      text-align: right;
+      padding-right: 4px;
+    }
+    .oi-chg.pe {
+      text-align: left;
+      padding-right: 0;
+      padding-left: 4px;
+    }
+    .pos { color: var(--buy-text); }
+    .neg { color: var(--sell-text); }
+
+    .oi-bar-cell {
+      position: relative;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      padding: 0 5px;
+      overflow: hidden;
+    }
+    .oi-bar-cell.ce { justify-content: flex-end; }
+    .oi-bar-cell.pe { justify-content: flex-start; }
+
+    .oi-bar {
+      position: absolute;
+      top: 2px;
+      bottom: 2px;
+      border-radius: 2px;
+    }
+    .oi-bar-cell.ce .oi-bar {
+      right: 0;
+      background: var(--sell-soft); /* Call writers = overhead supply / resistance */
+    }
+    .oi-bar-cell.ce .oi-bar.top {
+      background: var(--sell-solid);
+    }
+    .oi-bar-cell.pe .oi-bar {
+      left: 0;
+      background: var(--buy-soft); /* Put writers = support floor */
+    }
+    .oi-bar-cell.pe .oi-bar.top {
+      background: var(--buy-solid);
+    }
+
+    .oi-val {
+      position: relative;
+      z-index: 1;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .oi-val.top {
+      font-weight: 800;
+      color: #ffffff;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+    }
+    html[data-theme="light"] .oi-val.top {
+      color: #0f172a;
+      text-shadow: none;
+    }
+
+    .strike-cell {
+      text-align: center;
+      font-weight: 700;
+      color: var(--text-primary);
+      background: rgba(148, 163, 184, 0.06);
+      border-radius: 3px;
+      padding: 2px 0;
+    }
+    .oi-row.atm .strike-cell {
+      color: var(--accent-blue);
+      font-weight: 800;
+    }
+
+    @media (max-width: 1080px) {
+      body { overflow: auto; height: auto; }
+      .workspace {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+      .panel { height: 520px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOP HEADER & CONTROLS -->
+  <header class="topbar">
+    <div class="brand-group">
+      <div class="contract-badge">
+        <span class="contract-name" id="contractName">NIFTY DEMO FUT</span>
+        <span class="price-big" id="ltpDisplay">25,000.00</span>
+        <span class="chg-pill chg-up" id="chgDisplay">+0.00 (+0.00%)</span>
+      </div>
+
+      <div class="meta-pills">
+        <span class="pill" id="connPill">
+          <span class="status-dot dot-green" id="connDot"></span>
+          <strong id="connLabel">Demo Active</strong>
+        </span>
+        <span class="pill">Mid: <strong id="midDisplay">25,000.00</strong></span>
+        <span class="pill">Spread: <strong id="spreadDisplay">0.50</strong></span>
+        <span class="pill">Lot: <strong id="lotDisplay">65</strong></span>
+        <span class="pill">Depth: <strong id="levelsDisplay">20 lvls</strong></span>
+        <span class="pill" id="clockPill">00:00:00 IST</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <!-- Data Source Switch -->
+      <div class="seg-group" title="Switch between simulated Demo data and live Upstox Analytics Token">
+        <button class="seg-btn active" id="btnSourceDemo" onclick="setControl({source:'demo'})">Demo</button>
+        <button class="seg-btn" id="btnSourceUpstox" onclick="setControl({source:'upstox'})">Upstox Live</button>
+      </div>
+
+      <!-- Symbol Switch -->
+      <div class="seg-group" title="Switch index future">
+        <button class="seg-btn active" id="btnSymNifty" onclick="setControl({symbol:'NIFTY'})">NIFTY</button>
+        <button class="seg-btn" id="btnSymBank" onclick="setControl({symbol:'BANKNIFTY'})">BANKNIFTY</button>
+      </div>
+
+      <!-- Band Size -->
+      <div class="seg-group" title="Order book price band grouping size">
+        <button class="seg-btn active" id="btnBand1" onclick="setControl({band_size:1})">1 pt</button>
+        <button class="seg-btn" id="btnBand2" onclick="setControl({band_size:2})">2 pt</button>
+        <button class="seg-btn" id="btnBand5" onclick="setControl({band_size:5})">5 pt</button>
+      </div>
+
+      <!-- Price Scale Sync Toggle -->
+      <button class="action-btn active" id="btnScaleSync" onclick="toggleScaleSync()" title="Keep 1-min candles on the exact same vertical price scale as the order book">
+        Scale: Synced
+      </button>
+
+      <!-- Sound Alert Toggle (>500 lots within 10 pts) -->
+      <button class="action-btn" id="btnSound" onclick="toggleSound()" title="Beep when any band holds >500 lots within 10 points of price">
+        Beep: Off
+      </button>
+
+      <!-- Theme Switch -->
+      <button class="action-btn" id="btnTheme" onclick="toggleTheme()" title="Switch Light / Dark theme">
+        Light
+      </button>
+    </div>
+  </header>
+
+  <!-- STATUS / TOKEN RENEWAL BANNER (Shown when Upstox needs token or reconnects) -->
+  <div class="banner" id="statusBanner">
+    <span id="bannerText"></span>
+    <div style="display:flex; gap:6px;">
+      <button class="banner-btn" onclick="setControl({source:'upstox', reconnect:true})">Retry Upstox</button>
+      <button class="action-btn" id="btnDepthMode" style="display:none;" onclick="toggleDepthMode()">Mode: 5-Lvl (Free)</button>
+    </div>
+  </div>
+
+  <!-- MAIN 3-PANEL SCREEN -->
+  <main class="workspace">
+
+    <!-- 1. LEFT: 1-MINUTE CANDLES (Synced on exact same price scale as Order Book) -->
+    <section class="panel">
+      <div class="panel-header">
+        <span>1-Minute Candles</span>
+        <span class="panel-sub" id="candleMeta">Mid-price OHLC · Same price scale</span>
+      </div>
+      <div class="sync-subheader">
+        <span id="ohlcHover">Hover candle for OHLC</span>
+        <span id="scaleRangeLabel">Range: —</span>
+      </div>
+      <div class="sync-body">
+        <canvas id="candleCanvas"></canvas>
+      </div>
+      <div class="sync-footer">
+        <span id="candleCountLabel">0 candles</span>
+        <span>Built from (Best Bid + Best Ask) ÷ 2</span>
+      </div>
+    </section>
+
+    <!-- 2. CENTER: ORDER BOOK LADDER (Buy Green Left | Price Center | Sell Red Right) -->
+    <section class="panel">
+      <div class="panel-header">
+        <span>Order Book (Lots)</span>
+        <span class="panel-sub" id="bookMeta">Top 3 largest bands solid &amp; labelled</span>
+      </div>
+      <div class="sync-subheader">
+        <span style="color:var(--buy-text); font-weight:700;" id="totBuyLabel">Buy: 0 lots</span>
+        <div class="imbalance-wrap">
+          <div class="imbalance-bar">
+            <div class="imbalance-buy" id="imbalanceFill" style="width:50%"></div>
+          </div>
+        </div>
+        <span style="color:var(--sell-text); font-weight:700;" id="totSellLabel">Sell: 0 lots</span>
+      </div>
+      <div class="sync-body">
+        <div class="book-ladder" id="bookLadder"></div>
+      </div>
+      <div class="sync-footer">
+        <span style="color:var(--buy-text);" id="topBuyWallLabel">#1 Buy Wall: —</span>
+        <span style="color:var(--sell-text);" id="topSellWallLabel">#1 Sell Wall: —</span>
+      </div>
+    </section>
+
+    <!-- 3. RIGHT: OPTION OPEN INTEREST NEAR PRICE -->
+    <section class="panel">
+      <div class="panel-header">
+        <span>Option Open Interest (Lots)</span>
+        <span class="panel-sub" id="oiRefreshMeta">Refreshes every 60s</span>
+      </div>
+
+      <div class="oi-cards">
+        <div class="oi-card">
+          <div class="oi-card-title">Max Call OI (Res)</div>
+          <div class="oi-card-val" style="color:var(--sell-text);" id="maxCeStrike">—</div>
+          <div class="oi-card-sub" id="maxCeLots">— lots</div>
+        </div>
+        <div class="oi-card">
+          <div class="oi-card-title">Max Put OI (Sup)</div>
+          <div class="oi-card-val" style="color:var(--buy-text);" id="maxPeStrike">—</div>
+          <div class="oi-card-sub" id="maxPeLots">— lots</div>
+        </div>
+        <div class="oi-card">
+          <div class="oi-card-title">PCR &amp; Expiry</div>
+          <div class="oi-card-val" id="pcrDisplay">—</div>
+          <div class="oi-card-sub" id="expiryDisplay">—</div>
+        </div>
+      </div>
+
+      <div class="oi-table-head">
+        <span>CE ΔOI</span>
+        <span>Call OI (Lots)</span>
+        <span>Strike</span>
+        <span>Put OI (Lots)</span>
+        <span>PE ΔOI</span>
+      </div>
+
+      <div class="oi-table-body" id="oiTableBody"></div>
+
+      <div class="sync-footer">
+        <span>Solid = Top 3 Call / Put OI strikes</span>
+        <span id="oiTotalsLabel">CE: — | PE: —</span>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // ========================================================================
+    // FRONTEND SETTINGS (Top of script, 1-line comment per setting)
+    // ========================================================================
+    const REFRESH_MS = 1000;                // Page data refresh interval in milliseconds (1 second)
+    const ALERT_LOTS_THRESHOLD = 500;       // Beep alert lot threshold for a single price band
+    const ALERT_DISTANCE_POINTS = 10;       // Beep alert max distance in points from mid-price
+    const CANDLE_UP_COLOR = "#10b981";      // Bullish 1-minute candle body & wick colour
+    const CANDLE_DOWN_COLOR = "#ef4444";    // Bearish 1-minute candle body & wick colour
+    const MID_LINE_COLOR = "#f59e0b";       // Dashed current mid-price horizontal guide colour
+
+    let latestState = null;
+    let syncPriceScale = true;
+    let soundEnabled = false;
+    let audioCtx = null;
+    let lastBeepTime = 0;
+    let hoverCandleIdx = -1;
+    let centeredOiOnce = false;
+
+    const fmtPrice = (n) => Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtInt = (n) => Math.round(Number(n || 0)).toLocaleString("en-IN");
+    const fmtLots = (n) => {
+      const v = Number(n || 0);
+      return Number.isInteger(v) ? v.toLocaleString("en-IN") : v.toLocaleString("en-IN", { maximumFractionDigits: 1 });
+    };
+
+    async function fetchState() {
+      try {
+        const res = await fetch("/api/state", { cache: "no-store" });
+        if (!res.ok) return;
+        latestState = await res.json();
+        renderAll(latestState);
+      } catch (err) {
+        document.getElementById("connDot").className = "status-dot dot-red";
+        document.getElementById("connLabel").textContent = "Server Offline";
+      }
+    }
+
+    async function setControl(payload) {
+      try {
+        if (payload.symbol || payload.source) centeredOiOnce = false;
+        const res = await fetch("/api/control", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          latestState = await res.json();
+          renderAll(latestState);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function toggleScaleSync() {
+      syncPriceScale = !syncPriceScale;
+      const btn = document.getElementById("btnScaleSync");
+      btn.classList.toggle("active", syncPriceScale);
+      btn.textContent = syncPriceScale ? "Scale: Synced" : "Scale: Full Chart";
+      if (latestState) renderAll(latestState);
+    }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      if (soundEnabled && !audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      const btn = document.getElementById("btnSound");
+      btn.classList.toggle("active", soundEnabled);
+      btn.textContent = soundEnabled ? "Beep: On" : "Beep: Off";
+    }
+
+    function maybeBeepForLargeWall(state) {
+      if (!soundEnabled || !audioCtx || !state || !state.book) return;
+      const now = Date.now();
+      if (now - lastBeepTime < 8000) return; // Max 1 beep every 8s
+      const mid = state.mid_price || 0;
+      const hit = (state.book.rows || []).some((r) =>
+        Math.abs(r.price - mid) <= ALERT_DISTANCE_POINTS &&
+        (r.buy_lots >= ALERT_LOTS_THRESHOLD || r.sell_lots >= ALERT_LOTS_THRESHOLD)
+      );
+      if (hit) {
+        lastBeepTime = now;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = 880;
+        gain.gain.value = 0.08;
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.14);
+      }
+    }
+
+    function toggleTheme() {
+      const html = document.documentElement;
+      const next = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      html.setAttribute("data-theme", next);
+      document.getElementById("btnTheme").textContent = next === "dark" ? "Light" : "Dark";
+      if (latestState) drawCandles(latestState, computeDisplayLadder(latestState));
+    }
+
+    function toggleDepthMode() {
+      if (!latestState) return;
+      const next = latestState.depth_mode === "full_d30" ? "full" : "full_d30";
+      setControl({ depth_mode: next });
+    }
+
+    /**
+     * Build a unified vertical price ladder so 1-minute candles on the left
+     * and Order Book rows on the right share the EXACT same vertical price scale!
+     */
+    function computeDisplayLadder(state) {
+      const bookRows = (state.book && state.book.rows) ? state.book.rows : [];
+      const bs = Number(state.band_size || 1);
+      const mid = Number(state.mid_price || 25000);
+
+      if (!syncPriceScale || bookRows.length === 0) {
+        return {
+          rows: bookRows,
+          highEdge: bookRows.length ? bookRows[0].price + bs * 0.5 : mid + 10,
+          lowEdge: bookRows.length ? bookRows[bookRows.length - 1].price - bs * 0.5 : mid - 10,
+        };
+      }
+
+      // Include recent candles if within a reasonable visual span (<= 42 bands) so both fit 1:1
+      const rowMap = new Map();
+      let maxP = -Infinity;
+      let minP = Infinity;
+      for (const r of bookRows) {
+        rowMap.set(r.price.toFixed(2), r);
+        if (r.price > maxP) maxP = r.price;
+        if (r.price < minP) minP = r.price;
+      }
+
+      const recentCandles = (state.candles || []).slice(-35);
+      let cHigh = maxP;
+      let cLow = minP;
+      for (const c of recentCandles) {
+        if (c.high > cHigh) cHigh = c.high;
+        if (c.low < cLow) cLow = c.low;
+      }
+
+      const snappedHigh = Math.ceil(cHigh / bs) * bs;
+      const snappedLow = Math.floor(cLow / bs) * bs;
+      const maxAllowedRows = 42;
+      let topPrice = maxP;
+      let botPrice = minP;
+
+      if ((snappedHigh - snappedLow) / bs + 1 <= maxAllowedRows) {
+        topPrice = Math.max(maxP, snappedHigh);
+        botPrice = Math.min(minP, snappedLow);
+      } else {
+        // Center maxAllowedRows around active order book
+        const bookMid = Math.round(((maxP + minP) / 2) / bs) * bs;
+        const half = Math.floor(maxAllowedRows / 2);
+        topPrice = Math.max(maxP, bookMid + half * bs);
+        botPrice = Math.min(minP, topPrice - (maxAllowedRows - 1) * bs);
+      }
+
+      const unifiedRows = [];
+      const steps = Math.min(48, Math.max(1, Math.round((topPrice - botPrice) / bs) + 1));
+      for (let i = 0; i < steps; i++) {
+        const p = Number((topPrice - i * bs).toFixed(2));
+        const existing = rowMap.get(p.toFixed(2));
+        unifiedRows.push(existing || {
+          price: p,
+          buy_lots: 0,
+          sell_lots: 0,
+          buy_rank: 0,
+          sell_rank: 0,
+          buy_highlight: false,
+          sell_highlight: false,
+        });
+      }
+
+      const actualTop = unifiedRows[0].price;
+      const actualBot = unifiedRows[unifiedRows.length - 1].price;
+      return {
+        rows: unifiedRows,
+        highEdge: actualTop + bs * 0.5,
+        lowEdge: actualBot - bs * 0.5,
+      };
+    }
+
+    function renderAll(state) {
+      // 1. Header & Pills
+      document.getElementById("contractName").textContent = state.contract_name || state.symbol;
+      document.getElementById("ltpDisplay").textContent = fmtPrice(state.ltp);
+      document.getElementById("midDisplay").textContent = fmtPrice(state.mid_price);
+      document.getElementById("spreadDisplay").textContent = fmtPrice(state.spread);
+      document.getElementById("lotDisplay").textContent = state.lot_size;
+      document.getElementById("levelsDisplay").textContent = `${state.feed_levels} lvls`;
+      document.getElementById("clockPill").textContent = state.server_time_ist;
+
+      const chgEl = document.getElementById("chgDisplay");
+      const sign = state.change >= 0 ? "+" : "";
+      chgEl.textContent = `${sign}${fmtPrice(state.change)} (${sign}${state.change_pct.toFixed(2)}%)`;
+      chgEl.className = `chg-pill ${state.change >= 0 ? "chg-up" : "chg-dn"}`;
+
+      // Connection indicator
+      const dot = document.getElementById("connDot");
+      const lbl = document.getElementById("connLabel");
+      if (state.source === "demo") {
+        dot.className = "status-dot dot-green";
+        lbl.textContent = "Demo Mode";
+      } else if (state.connection_status === "live_connected") {
+        dot.className = state.market_open ? "status-dot dot-green" : "status-dot dot-amber";
+        lbl.textContent = state.market_open ? "Upstox Live" : "Upstox (Mkt Closed)";
+      } else if (state.connection_status === "connecting" || state.connection_status === "reconnecting") {
+        dot.className = "status-dot dot-amber";
+        lbl.textContent = state.connection_status === "reconnecting" ? "Reconnecting..." : "Connecting...";
+      } else {
+        dot.className = "status-dot dot-red";
+        lbl.textContent = state.token_expired ? "Token Needed" : "Upstox Error";
+      }
+
+      // Active control highlights
+      document.getElementById("btnSourceDemo").classList.toggle("active", state.source === "demo");
+      document.getElementById("btnSourceUpstox").classList.toggle("active", state.source === "upstox");
+      document.getElementById("btnSymNifty").classList.toggle("active", state.symbol === "NIFTY");
+      document.getElementById("btnSymBank").classList.toggle("active", state.symbol === "BANKNIFTY");
+      document.getElementById("btnBand1").classList.toggle("active", Number(state.band_size) === 1);
+      document.getElementById("btnBand2").classList.toggle("active", Number(state.band_size) === 2);
+      document.getElementById("btnBand5").classList.toggle("active", Number(state.band_size) === 5);
+
+      // Banner for Upstox status / token guidance
+      const banner = document.getElementById("statusBanner");
+      const depthBtn = document.getElementById("btnDepthMode");
+      if (state.source === "upstox") {
+        depthBtn.style.display = "inline-block";
+        depthBtn.textContent = state.depth_mode === "full_d30" ? "Mode: 30-Lvl (Plus)" : "Mode: 5-Lvl (Free)";
+        const isWarn = state.connection_status !== "live_connected" || !state.market_open;
+        banner.classList.toggle("visible", isWarn);
+        banner.classList.toggle("error", Boolean(state.token_expired));
+        document.getElementById("bannerText").textContent = state.status_message;
+      } else {
+        banner.classList.remove("visible");
+        depthBtn.style.display = "none";
+      }
+
+      // 2. Unified Price Ladder + Candles
+      const displayLadder = computeDisplayLadder(state);
+      renderOrderBook(state, displayLadder);
+      drawCandles(state, displayLadder);
+
+      // 3. Option Open Interest
+      renderOptionChain(state);
+
+      // 4. Optional sound alert
+      maybeBeepForLargeWall(state);
+    }
+
+    function renderOrderBook(state, displayLadder) {
+      const book = state.book || {};
+      const rows = displayLadder.rows || [];
+      const maxLots = Math.max(1, book.max_band_lots || 1);
+      const bs = Number(state.band_size || 1);
+      const mid = Number(state.mid_price || 0);
+
+      const totBuy = book.total_buy_lots || 0;
+      const totSell = book.total_sell_lots || 0;
+      const sumLots = totBuy + totSell;
+      const buyPct = sumLots > 0 ? (totBuy / sumLots) * 100 : 50;
+
+      document.getElementById("totBuyLabel").textContent = `Buy: ${fmtLots(totBuy)} lots`;
+      document.getElementById("totSellLabel").textContent = `Sell: ${fmtLots(totSell)} lots`;
+      document.getElementById("imbalanceFill").style.width = `${buyPct.toFixed(1)}%`;
+      document.getElementById("bookMeta").textContent = `${bs}-pt bands · Lot=${state.lot_size} · Top ${state.highlight_top_n} solid`;
+
+      const topB = (book.top_buy_bands || [])[0];
+      const topS = (book.top_sell_bands || [])[0];
+      document.getElementById("topBuyWallLabel").textContent = topB
+        ? `#1 Buy: ${fmtLots(topB.lots)} lots @ ${topB.price}`
+        : "#1 Buy Wall: —";
+      document.getElementById("topSellWallLabel").textContent = topS
+        ? `#1 Sell: ${fmtLots(topS.lots)} lots @ ${topS.price}`
+        : "#1 Sell Wall: —";
+
+      const container = document.getElementById("bookLadder");
+      const html = rows.map((r) => {
+        const isMid = Math.abs(r.price - mid) <= bs * 0.51;
+        const bPct = r.buy_lots > 0 ? Math.min(100, (r.buy_lots / maxLots) * 100) : 0;
+        const sPct = r.sell_lots > 0 ? Math.min(100, (r.sell_lots / maxLots) * 100) : 0;
+
+        const buyBadge = r.buy_rank > 0 ? `<span class="rank-tag">#${r.buy_rank}</span>` : "";
+        const sellBadge = r.sell_rank > 0 ? `<span class="rank-tag">#${r.sell_rank}</span>` : "";
+
+        const buyContent = r.buy_lots > 0
+          ? `<div class="depth-bar ${r.buy_highlight ? "solid" : ""}" style="width:${bPct.toFixed(1)}%"></div>
+             <span class="lot-label ${r.buy_highlight ? "solid-label" : ""}">${buyBadge}${fmtLots(r.buy_lots)}</span>`
+          : "";
+
+        const sellContent = r.sell_lots > 0
+          ? `<div class="depth-bar ${r.sell_highlight ? "solid" : ""}" style="width:${sPct.toFixed(1)}%"></div>
+             <span class="lot-label ${r.sell_highlight ? "solid-label" : ""}">${fmtLots(r.sell_lots)}${sellBadge}</span>`
+          : "";
+
+        const pLabel = Number.isInteger(r.price) ? r.price.toLocaleString("en-IN") : r.price.toFixed(1);
+
+        return `<div class="book-row ${isMid ? "is-mid" : ""}">
+          <div class="book-side buy">${buyContent}</div>
+          <div class="price-cell">${pLabel}</div>
+          <div class="book-side sell">${sellContent}</div>
+        </div>`;
+      }).join("");
+
+      container.innerHTML = html;
+    }
+
+    function drawCandles(state, displayLadder) {
+      const canvas = document.getElementById("candleCanvas");
+      const rect = canvas.parentElement.getBoundingClientRect();
+      if (rect.width < 10 || rect.height < 10) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(rect.width * dpr);
+      canvas.height = Math.floor(rect.height * dpr);
+
+      const ctx = canvas.getContext("2d");
+      ctx.scale(dpr, dpr);
+
+      const W = rect.width;
+      const H = rect.height;
+      ctx.clearRect(0, 0, W, H);
+
+      const styles = getComputedStyle(document.documentElement);
+      const borderCol = styles.getPropertyValue("--border-subtle").trim() || "#1f2b3e";
+      const mutedCol = styles.getPropertyValue("--text-muted").trim() || "#64748b";
+
+      const candles = (state.candles || []).slice(-40);
+      document.getElementById("candleCountLabel").textContent = `${candles.length} × 1-min candles`;
+
+      if (!candles.length) return;
+
+      // Determine Y-axis price bounds
+      let highP, lowP;
+      if (syncPriceScale && displayLadder.rows.length > 0) {
+        highP = displayLadder.highEdge;
+        lowP = displayLadder.lowEdge;
+      } else {
+        highP = Math.max(...candles.map((c) => c.high));
+        lowP = Math.min(...candles.map((c) => c.low));
+        const pad = Math.max(2, (highP - lowP) * 0.08);
+        highP += pad;
+        lowP -= pad;
+      }
+
+      document.getElementById("scaleRangeLabel").textContent =
+        `${lowP.toFixed(0)} – ${highP.toFixed(0)}`;
+
+      const span = Math.max(0.5, highP - lowP);
+      const yOf = (p) => ((highP - p) / span) * H;
+
+      // Horizontal price grid aligned with ladder rows
+      ctx.strokeStyle = borderCol;
+      ctx.lineWidth = 0.6;
+      ctx.fillStyle = mutedCol;
+      ctx.font = "10px -apple-system, BlinkMacSystemFont, sans-serif";
+
+      const step = state.symbol === "BANKNIFTY" ? 10 : 5;
+      const firstGrid = Math.ceil(lowP / step) * step;
+      for (let gp = firstGrid; gp <= highP; gp += step) {
+        const y = yOf(gp);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(W, y);
+        ctx.stroke();
+        ctx.fillText(gp.toLocaleString("en-IN"), 6, Math.max(10, y - 3));
+      }
+
+      // Draw candles left-to-right leaving slight margin on left for price labels
+      const leftPad = 48;
+      const rightPad = 10;
+      const plotW = Math.max(40, W - leftPad - rightPad);
+      const slotW = plotW / Math.max(15, candles.length);
+      const bodyW = Math.max(3, Math.min(13, slotW * 0.66));
+
+      candles.forEach((c, idx) => {
+        const cx = leftPad + idx * slotW + slotW * 0.5;
+        const yO = yOf(c.open);
+        const yC = yOf(c.close);
+        const yH = yOf(c.high);
+        const yL = yOf(c.low);
+        const isUp = c.close >= c.open;
+        const col = isUp ? CANDLE_UP_COLOR : CANDLE_DOWN_COLOR;
+
+        // Wick
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.moveTo(cx, yH);
+        ctx.lineTo(cx, yL);
+        ctx.stroke();
+
+        // Body
+        const topY = Math.min(yO, yC);
+        const bh = Math.max(1.8, Math.abs(yC - yO));
+        ctx.fillStyle = col;
+        ctx.fillRect(cx - bodyW / 2, topY, bodyW, bh);
+
+        // Time stamp every ~10 candles at bottom
+        if (idx % 10 === 0 || idx === candles.length - 1) {
+          const d = new Date(c.time * 1000);
+          const hh = String(d.getHours()).padStart(2, "0");
+          const mm = String(d.getMinutes()).padStart(2, "0");
+          ctx.fillStyle = mutedCol;
+          ctx.fillText(`${hh}:${mm}`, Math.max(leftPad, cx - 14), H - 5);
+        }
+      });
+
+      // Dashed mid-price line extending right into the Order Book's current price row!
+      const midY = yOf(state.mid_price);
+      if (midY >= 0 && midY <= H) {
+        ctx.save();
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = MID_LINE_COLOR;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(0, midY);
+        ctx.lineTo(W, midY);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Update OHLC caption for hovered or latest candle
+      const shown = (hoverCandleIdx >= 0 && hoverCandleIdx < candles.length)
+        ? candles[hoverCandleIdx]
+        : candles[candles.length - 1];
+      if (shown) {
+        const dt = new Date(shown.time * 1000);
+        const tStr = `${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
+        document.getElementById("ohlcHover").textContent =
+          `${tStr}  O:${shown.open.toFixed(1)}  H:${shown.high.toFixed(1)}  L:${shown.low.toFixed(1)}  C:${shown.close.toFixed(1)}`;
+      }
+
+      canvas._meta = { candles, leftPad, slotW };
+    }
+
+    // Interactive hover on candle canvas
+    document.getElementById("candleCanvas").addEventListener("mousemove", (ev) => {
+      const canvas = ev.currentTarget;
+      if (!canvas._meta || !latestState) return;
+      const r = canvas.getBoundingClientRect();
+      const x = ev.clientX - r.left;
+      const idx = Math.floor((x - canvas._meta.leftPad) / canvas._meta.slotW);
+      if (idx >= 0 && idx < canvas._meta.candles.length) {
+        hoverCandleIdx = idx;
+        drawCandles(latestState, computeDisplayLadder(latestState));
+      }
+    });
+    document.getElementById("candleCanvas").addEventListener("mouseleave", () => {
+      hoverCandleIdx = -1;
+      if (latestState) drawCandles(latestState, computeDisplayLadder(latestState));
+    });
+
+    function renderOptionChain(state) {
+      const oc = state.option_chain || {};
+      const rows = oc.rows || [];
+      const sum = oc.summary || {};
+
+      const rem = Math.max(0, (oc.refresh_seconds || 60) - (oc.age_seconds || 0));
+      document.getElementById("oiRefreshMeta").textContent = `Next refresh in ${rem}s`;
+
+      document.getElementById("maxCeStrike").textContent = sum.max_ce_strike ? `${sum.max_ce_strike} CE` : "—";
+      document.getElementById("maxCeLots").textContent = sum.max_ce_lots ? `${fmtInt(sum.max_ce_lots)} lots` : "—";
+      document.getElementById("maxPeStrike").textContent = sum.max_pe_strike ? `${sum.max_pe_strike} PE` : "—";
+      document.getElementById("maxPeLots").textContent = sum.max_pe_lots ? `${fmtInt(sum.max_pe_lots)} lots` : "—";
+
+      const pcr = Number(sum.pcr || 0);
+      const pcrBias = pcr >= 1.05 ? "Bullish" : (pcr > 0 && pcr <= 0.92 ? "Bearish" : "Neutral");
+      const pcrEl = document.getElementById("pcrDisplay");
+      pcrEl.textContent = pcr ? `${pcr.toFixed(2)} (${pcrBias})` : "—";
+      pcrEl.style.color = pcr >= 1.05 ? "var(--buy-text)" : (pcr > 0 && pcr <= 0.92 ? "var(--sell-text)" : "var(--text-primary)");
+      document.getElementById("expiryDisplay").textContent = sum.expiry || "—";
+
+      document.getElementById("oiTotalsLabel").textContent = sum.total_ce_lots
+        ? `CE: ${fmtInt(sum.total_ce_lots)} | PE: ${fmtInt(sum.total_pe_lots)} lots`
+        : "Waiting for OI...";
+
+      const maxOi = Math.max(1, sum.max_oi_lots || 1);
+      const tbody = document.getElementById("oiTableBody");
+
+      tbody.innerHTML = rows.map((r) => {
+        const cePct = Math.min(100, (r.ce_oi_lots / maxOi) * 100);
+        const pePct = Math.min(100, (r.pe_oi_lots / maxOi) * 100);
+
+        const ceTop = r.ce_rank > 0;
+        const peTop = r.pe_rank > 0;
+
+        const ceRankBadge = ceTop ? `<span class="rank-tag">#${r.ce_rank}</span>` : "";
+        const peRankBadge = peTop ? `<span class="rank-tag">#${r.pe_rank}</span>` : "";
+
+        const ceChgSign = r.ce_chg_lots >= 0 ? "+" : "";
+        const peChgSign = r.pe_chg_lots >= 0 ? "+" : "";
+
+        return `<div class="oi-row ${r.is_atm ? "atm" : ""}" ${r.is_atm ? 'id="atmOiRow"' : ""}>
+          <div class="oi-chg ${r.ce_chg_lots >= 0 ? "pos" : "neg"}">${ceChgSign}${fmtInt(r.ce_chg_lots)}</div>
+          <div class="oi-bar-cell ce">
+            <div class="oi-bar ${ceTop ? "top" : ""}" style="width:${cePct.toFixed(1)}%"></div>
+            <span class="oi-val ${ceTop ? "top" : ""}">${ceRankBadge}${fmtInt(r.ce_oi_lots)}</span>
+          </div>
+          <div class="strike-cell">${r.strike}</div>
+          <div class="oi-bar-cell pe">
+            <div class="oi-bar ${peTop ? "top" : ""}" style="width:${pePct.toFixed(1)}%"></div>
+            <span class="oi-val ${peTop ? "top" : ""}">${fmtInt(r.pe_oi_lots)}${peRankBadge}</span>
+          </div>
+          <div class="oi-chg pe ${r.pe_chg_lots >= 0 ? "pos" : "neg"}">${peChgSign}${fmtInt(r.pe_chg_lots)}</div>
+        </div>`;
+      }).join("");
+
+      if (!centeredOiOnce && rows.length > 0) {
+        const atmEl = document.getElementById("atmOiRow");
+        if (atmEl) {
+          centeredOiOnce = true;
+          atmEl.scrollIntoView({ block: "center" });
+        }
+      }
+    }
+
+    window.addEventListener("resize", () => {
+      if (latestState) drawCandles(latestState, computeDisplayLadder(latestState));
+    });
+
+    fetchState();
+    setInterval(fetchState, REFRESH_MS);
+  </script>
+</body>
+</html>

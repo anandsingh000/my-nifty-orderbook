@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: nifty-orderbook-screen
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: UPSTOX_ANALYTICS_TOKEN
+        sync: false
+      - key: APP_PASSWORD
+        sync: false
+      - key: SOURCE
+        value: upstox
+      - key: UPSTOX_DEPTH_MODE
+        value: full
