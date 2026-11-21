@@ -614,17 +614,17 @@
       grid-template-columns: var(--c1, 1.06fr) 8px var(--c2, 1.30fr) 8px var(--c3, 1.02fr);
     }
     .flow-panel {
-      background: #07090d;
-      border-color: #192231;
+      background: #030406;
+      border-color: #171f2c;
     }
     html[data-theme="light"] .flow-panel {
       background: #ffffff;
       border-color: #cbd5e1;
     }
     .flow-header {
-      background: #0b0f16;
-      border-bottom: 1px solid #161e2b;
-      padding: 8px 14px;
+      background: #06080c;
+      border-bottom: 1px solid #141b26;
+      padding: 7px 12px;
     }
     html[data-theme="light"] .flow-header {
       background: #f1f5f9;
@@ -1052,7 +1052,7 @@
     <!-- BOX 2 (CENTER): SEPARATE GIF-STYLE LIVE ORDER BOOK (Waiting · Bought/Sold · Pulled) -->
     <section class="panel flow-panel" id="bookPanel">
       <div class="panel-header flow-header">
-        <span class="flow-title" id="flowTitle">Order Book (lots waiting, per 5 pts)</span>
+        <span class="flow-title" id="flowTitle">Order book (lots waiting, per 5 points)</span>
         <div class="chart-tools">
           <button class="chart-tool-btn" onclick="zoomChart('dom', 1.18)" title="Show more price rows">−</button>
           <button class="chart-tool-btn" onclick="zoomChart('dom', 0.85)" title="Zoom in price rows">+</button>
@@ -1060,32 +1060,17 @@
         </div>
       </div>
 
-      <div class="flow-legend-bar" style="padding:6px 10px;">
-        <div class="flow-legend-items" style="gap:11px; font-size:11px;">
-          <span class="flow-leg-item"><span class="leg-dot leg-buy"></span>buyers · bought</span>
-          <span class="flow-leg-item"><span class="leg-dot leg-sell"></span>sellers · sold</span>
+      <div class="flow-legend-bar" style="padding:5px 10px; background:#030406; flex-wrap:nowrap;">
+        <div class="flow-legend-items" style="gap:9px; font-size:10.5px; flex-wrap:nowrap; white-space:nowrap;">
+          <span class="flow-leg-item"><span class="leg-dot leg-buy"></span>buyers waiting · bought</span>
+          <span class="flow-leg-item"><span class="leg-dot leg-sell"></span>sellers waiting · sold</span>
           <span class="flow-leg-item"><span class="leg-dot leg-pull"></span>pulled (cancelled)</span>
         </div>
+        <span id="bookFormingLbl" style="color:#8b949e; font-size:10.5px; font-variant-numeric:tabular-nums; white-space:nowrap;">forming candle · 0s</span>
       </div>
 
       <div class="sync-body">
         <canvas id="bookCanvas"></canvas>
-      </div>
-
-      <div class="sync-footer" style="background:#0b0f16; border-top-color:#161e2b;">
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span style="color:#58c977; font-weight:700;" id="totBuyLabel">Buy: 0</span>
-          <div style="width:64px;">
-            <div class="imbalance-bar">
-              <div class="imbalance-buy" id="imbalanceFill" style="width:50%"></div>
-            </div>
-          </div>
-          <span style="color:#df6b53; font-weight:700;" id="totSellLabel">Sell: 0</span>
-        </div>
-        <div style="display:flex; align-items:center; gap:8px; font-size:10.5px;">
-          <span style="color:#58c977;" id="topBuyWallLabel">#1B: —</span>
-          <span style="color:#df6b53;" id="topSellWallLabel">#1S: —</span>
-        </div>
       </div>
     </section>
 
@@ -1553,37 +1538,20 @@
     }
 
     // ========================================================================
-    // BOX 2 (SEPARATE): GIF-STYLE ORDER BOOK (Waiting · Bought/Sold · Pulled)
+    // BOX 2 (SEPARATE): EXACT GIF ORDER BOOK (Waiting · Bought/Sold · Pulled)
     // ========================================================================
     function renderOrderBook(state, _displayLadder) {
-      const book = state.book || {};
       const bs = Math.max(0.5, Number(state.band_size || 5));
-      const ptsWord = bs === 1 ? "1 pt" : `${bs} pts`;
+      const ptsWord = bs === 1 ? "1 point" : `${bs} points`;
 
       document.getElementById("flowTitle").textContent =
-        `Order Book (lots waiting, per ${ptsWord})`;
+        `Order book (lots waiting, per ${ptsWord})`;
 
       const secInto = Number(state.candle_sec_into_min ?? (new Date().getSeconds()));
       document.getElementById("formingCandleLbl").textContent =
         `forming candle · ${secInto}s`;
-
-      const totBuy = book.total_buy_lots || 0;
-      const totSell = book.total_sell_lots || 0;
-      const sumLots = totBuy + totSell;
-      const buyPct = sumLots > 0 ? (totBuy / sumLots) * 100 : 50;
-
-      document.getElementById("totBuyLabel").textContent = `Buy: ${fmtLots(totBuy)}`;
-      document.getElementById("totSellLabel").textContent = `Sell: ${fmtLots(totSell)}`;
-      document.getElementById("imbalanceFill").style.width = `${buyPct.toFixed(1)}%`;
-
-      const topB = (book.top_buy_bands || [])[0];
-      const topS = (book.top_sell_bands || [])[0];
-      document.getElementById("topBuyWallLabel").textContent = topB
-        ? `#1B: ${fmtLots(topB.lots)} @ ${fmtInt(topB.price)}`
-        : "#1B: —";
-      document.getElementById("topSellWallLabel").textContent = topS
-        ? `#1S: ${fmtLots(topS.lots)} @ ${fmtInt(topS.price)}`
-        : "#1S: —";
+      const bfEl = document.getElementById("bookFormingLbl");
+      if (bfEl) bfEl.textContent = `forming candle · ${secInto}s`;
 
       drawOrderBookCanvas(state);
     }
@@ -1615,26 +1583,28 @@
       const ltp = Number(state.ltp || mid);
       const centerSnap = Math.round(mid / bs) * bs;
 
+      // Exact ~22-row vertical spacing matching GIF (zoomable smoothly via wheel or dragging price spine)
       const plotH = H;
-      const baseSpan = 23 * bs;
+      const baseSpan = 22 * bs;
       const span = Math.max(8 * bs, Math.min(70 * bs, baseSpan * view.yZoom));
       const centerP = centerSnap + view.yPanPts;
       const highP = centerP + span / 2;
       const lowP = centerP - span / 2;
       const yOf = (p) => ((highP - p) / span) * plotH;
 
-      // Dedicated coordinates inside Box 2 (Buy Dot | Buy Count + Bar | Price Spine | Sell Bar + Count | Sell Dot | Callouts)
-      const priceX = Math.floor(W * 0.355);
-      const buyAnchorX = priceX - 29;
-      const sellAnchorX = priceX + 33;
-      const maxBarW = Math.max(46, Math.floor(W * 0.165));
-      const buyDotX = Math.max(12, buyAnchorX - maxBarW - 34);
-      const sellDotX = sellAnchorX + maxBarW + 31;
-      const calloutX = sellDotX + 10;
+      // Exact GIF column proportions:
+      // [Left Amber Dot] [Buy Lots + Linear Green/Amber Bar] | [Price 25,410 ◀] | [Linear Coral/Amber Bar + Sell Lots] [Right Amber Dot] [Big Sellers · 12 sold · 536 pulled]
+      const priceX = Math.floor(W * 0.335);
+      const buyAnchorX = priceX - 28;
+      const sellAnchorX = priceX + 34;
+      const maxBarW = Math.max(44, Math.floor(W * 0.145));
+      const buyDotX = Math.max(15, buyAnchorX - maxBarW - 36);
+      const calloutX = Math.min(Math.max(sellAnchorX + maxBarW + 38, W - 185), sellAnchorX + maxBarW + 44);
+      const sellDotX = calloutX - 15;
 
-      if (view.hoverX >= priceX - 28 && view.hoverX <= priceX + 32) {
-        ctx.fillStyle = "rgba(148, 163, 184, 0.06)";
-        ctx.fillRect(priceX - 28, 0, 60, plotH);
+      if (view.hoverX >= priceX - 28 && view.hoverX <= priceX + 34) {
+        ctx.fillStyle = "rgba(148, 163, 184, 0.05)";
+        ctx.fillRect(priceX - 28, 0, 62, plotH);
       }
 
       const rawRows = (state.book && state.book.rows) || [];
@@ -1644,7 +1614,7 @@
       }
 
       const rawRowStepPx = (bs / span) * plotH;
-      const stride = rawRowStepPx < 13 ? Math.ceil(13 / rawRowStepPx) : 1;
+      const stride = rawRowStepPx < 14 ? Math.ceil(14 / rawRowStepPx) : 1;
       const dispStep = bs * stride;
 
       const topBand = Math.floor(highP / dispStep) * dispStep;
@@ -1652,7 +1622,7 @@
       const activeBand = Math.round(ltp / dispStep) * dispStep;
 
       const visBands = [];
-      let maxCombinedLots = 80;
+      let maxScaleLots = 260;
       for (let p = topBand; p >= botBand - 1e-6; p = Math.round((p - dispStep) * 100) / 100) {
         let buyL = 0, sellL = 0, pullB = 0, pullS = 0, boughtL = 0, soldL = 0, bigB = false, bigS = false;
         for (let sub = 0; sub < stride; sub++) {
@@ -1669,7 +1639,8 @@
             if (hit.big_seller) bigS = true;
           }
         }
-        maxCombinedLots = Math.max(maxCombinedLots, buyL + pullB, sellL + pullS);
+        // Scale against waiting lots + realistic ghost display cap so small rows (15, 18, 37) stay crisp 1–3px linear ticks!
+        maxScaleLots = Math.max(maxScaleLots, buyL, sellL, Math.min(buyL + pullB, 700), Math.min(sellL + pullS, 700));
         visBands.push({
           price: p,
           buy_lots: Math.round(buyL),
@@ -1684,149 +1655,157 @@
         });
       }
 
+      // PURE LINEAR SCALING (matching GIF: 15->1.5px, 37->3.5px, 78->7px, 129->12px, 1,154->full green wall!)
       const widthOfLots = (lots) => {
         if (lots <= 0) return 0;
-        return Math.min(maxBarW, Math.max(2, Math.pow(lots / maxCombinedLots, 0.72) * maxBarW));
+        return Math.min(maxBarW, Math.max(1.4, (lots / maxScaleLots) * maxBarW));
       };
 
       const rowStepPx = (dispStep / span) * plotH;
-      const barH = Math.max(6, Math.min(14, rowStepPx * 0.64));
+      // Tall stacked rectangular blocks (82% of row height, leaving ~2.5px dark hairline gap just like GIF!)
+      const barH = Math.max(8, Math.min(20, Math.round(rowStepPx * 0.82)));
+
+      const drawGlowDot = (cx, cy, pulledAmt) => {
+        const rad = Math.min(6.8, 2.2 + Math.sqrt(pulledAmt) * 0.22);
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad + 2.0, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(205, 142, 56, 0.18)";
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(212, 150, 62, 0.72)";
+        ctx.fill();
+      };
 
       for (const r of visBands) {
         const y = yOf(r.price);
-        if (y < 9 || y > plotH - 9) continue;
+        if (y < 10 || y > plotH - 10) continue;
 
         const isActive = Math.abs(r.price - activeBand) < 1e-4;
         const pStr = Number.isInteger(r.price) ? r.price.toLocaleString("en-IN") : r.price.toFixed(1);
 
-        // 1. Center Price Spine + Active Row White Pointer `◀`
+        // 1. Center Price Spine + Bold White Active Row `25,410 ◀`
         ctx.textAlign = "center";
         if (isActive) {
           ctx.fillStyle = isLight ? "#0f172a" : "#ffffff";
-          ctx.font = "bold 11.5px ui-monospace, SFMono-Regular, Menlo, monospace";
+          ctx.font = "bold 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
           ctx.fillText(pStr, priceX - 2, y + 4);
+          // Bold crisp white triangle `◀` (exact GIF size & position!)
           ctx.beginPath();
-          ctx.moveTo(priceX + 22, y);
-          ctx.lineTo(priceX + 28, y - 4.2);
-          ctx.lineTo(priceX + 28, y + 4.2);
+          ctx.moveTo(priceX + 21, y);
+          ctx.lineTo(priceX + 28.5, y - 5);
+          ctx.lineTo(priceX + 28.5, y + 5);
           ctx.closePath();
           ctx.fill();
         } else {
-          ctx.fillStyle = isLight ? "#475569" : "#9ca3af";
-          ctx.font = "11px ui-monospace, SFMono-Regular, Menlo, monospace";
-          ctx.fillText(pStr, priceX - 2, y + 3.5);
+          ctx.fillStyle = isLight ? "#475569" : "#9aa2ac";
+          ctx.font = "11.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+          ctx.fillText(pStr, priceX - 2, y + 4);
         }
 
-        // Baseline ticks `|` only on active sides
-        ctx.strokeStyle = isLight ? "rgba(100,116,139,0.4)" : "rgba(148,163,184,0.34)";
+        // Delicate baseline tick `|` ONLY on sides that have resting/pulled lots (empty rows like 25,405 have NO ticks!)
+        ctx.strokeStyle = isLight ? "rgba(100,116,139,0.45)" : "rgba(148,163,184,0.38)";
         ctx.lineWidth = 1;
         ctx.beginPath();
         if (r.buy_lots > 0 || r.pulled_buy > 0) {
-          ctx.moveTo(buyAnchorX, y - barH * 0.52);
-          ctx.lineTo(buyAnchorX, y + barH * 0.52);
+          ctx.moveTo(buyAnchorX, y - barH * 0.5);
+          ctx.lineTo(buyAnchorX, y + barH * 0.5);
         }
         if (r.sell_lots > 0 || r.pulled_sell > 0) {
-          ctx.moveTo(sellAnchorX, y - barH * 0.52);
-          ctx.lineTo(sellAnchorX, y + barH * 0.52);
+          ctx.moveTo(sellAnchorX, y - barH * 0.5);
+          ctx.lineTo(sellAnchorX, y + barH * 0.5);
         }
         ctx.stroke();
 
-        // 2. BUY SIDE (Left): Pulled Amber Ghost Bar + Solid Green Waiting Bar + Count + Amber Dot
+        // 2. BUY SIDE (Left): Warm Ochre Pulled Ghost + Solid Sage-Emerald Waiting Bar + Lot Count + Glowing Amber Dot
         const wBuy = widthOfLots(r.buy_lots);
-        const wBuyWithPull = widthOfLots(r.buy_lots + r.pulled_buy);
+        const wBuyGhost = r.pulled_buy > 0 ? widthOfLots(r.buy_lots + Math.min(r.pulled_buy, maxScaleLots * 0.48)) : 0;
 
-        if (r.pulled_buy > 0 && wBuyWithPull > wBuy) {
-          ctx.fillStyle = "rgba(210, 144, 48, 0.44)";
-          ctx.fillRect(buyAnchorX - wBuyWithPull, y - barH / 2, wBuyWithPull - wBuy, barH);
-          ctx.fillStyle = "#eab308";
-          ctx.fillRect(buyAnchorX - wBuyWithPull, y - barH / 2, 1.8, barH);
+        if (wBuyGhost > wBuy) {
+          ctx.fillStyle = "rgba(196, 130, 50, 0.56)";
+          ctx.fillRect(buyAnchorX - wBuyGhost, y - barH / 2, wBuyGhost - wBuy, barH);
         }
         if (r.buy_lots > 0) {
-          ctx.fillStyle = r.big_buyer ? "#5ed37d" : "#4ca965";
+          ctx.fillStyle = r.big_buyer ? "#63ca71" : "#56b864";
           ctx.fillRect(buyAnchorX - wBuy, y - barH / 2, wBuy, barH);
         }
         if (r.buy_lots > 0) {
-          const leftBarEdge = buyAnchorX - Math.max(wBuy, r.pulled_buy > 0 ? wBuyWithPull : 0);
+          const leftBarEdge = buyAnchorX - Math.max(wBuy, wBuyGhost);
           ctx.textAlign = "right";
-          ctx.fillStyle = r.big_buyer ? (isLight ? "#0f172a" : "#f8fafc") : (isLight ? "#475569" : "#cbd5e1");
+          ctx.fillStyle = r.big_buyer ? (isLight ? "#0f172a" : "#e6edf3") : (isLight ? "#475569" : "#b1bac4");
           ctx.font = r.big_buyer
-            ? "bold 11px ui-monospace, SFMono-Regular, Menlo, monospace"
-            : "10.5px ui-monospace, SFMono-Regular, Menlo, monospace";
-          ctx.fillText(fmtInt(r.buy_lots), leftBarEdge - 5, y + 3.5);
+            ? "bold 11.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+            : "11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+          ctx.fillText(fmtInt(r.buy_lots), leftBarEdge - 5, y + 4);
         }
-        if (r.pulled_buy >= 10) {
-          const rad = Math.min(5.5, 2.0 + Math.sqrt(r.pulled_buy) * 0.21);
-          ctx.beginPath();
-          ctx.arc(buyDotX, y, rad, 0, Math.PI * 2);
-          ctx.fillStyle = "rgba(217, 155, 56, 0.65)";
-          ctx.fill();
+        if (r.pulled_buy >= 12) {
+          drawGlowDot(buyDotX, y, r.pulled_buy);
         }
 
-        // 3. SELL SIDE (Right): Pulled Amber Ghost Bar + Coral Waiting Bar + Count + Amber Dot
+        // 3. SELL SIDE (Right): Warm Ochre Pulled Ghost + Solid Terracotta-Coral Waiting Bar + Lot Count + Glowing Amber Dot
         const wSell = widthOfLots(r.sell_lots);
-        const wSellWithPull = widthOfLots(r.sell_lots + r.pulled_sell);
+        const wSellGhost = r.pulled_sell > 0 ? widthOfLots(r.sell_lots + Math.min(r.pulled_sell, maxScaleLots * 0.48)) : 0;
 
-        if (r.pulled_sell > 0 && wSellWithPull > wSell) {
-          ctx.fillStyle = "rgba(210, 144, 48, 0.44)";
-          ctx.fillRect(sellAnchorX + wSell, y - barH / 2, wSellWithPull - wSell, barH);
-          ctx.fillStyle = "#eab308";
-          ctx.fillRect(sellAnchorX + wSellWithPull - 1.8, y - barH / 2, 1.8, barH);
+        if (wSellGhost > wSell) {
+          ctx.fillStyle = "rgba(196, 130, 50, 0.56)";
+          ctx.fillRect(sellAnchorX + wSell, y - barH / 2, wSellGhost - wSell, barH);
         }
         if (r.sell_lots > 0) {
-          ctx.fillStyle = r.big_seller ? "#e57358" : "#c2704a";
+          ctx.fillStyle = r.big_seller ? "#e36f52" : "#cf6d4d";
           ctx.fillRect(sellAnchorX, y - barH / 2, wSell, barH);
         }
         if (r.sell_lots > 0) {
-          const rightBarEdge = sellAnchorX + Math.max(wSell, r.pulled_sell > 0 ? wSellWithPull : 0);
+          const rightBarEdge = sellAnchorX + Math.max(wSell, wSellGhost);
           ctx.textAlign = "left";
-          ctx.fillStyle = r.big_seller ? (isLight ? "#0f172a" : "#f8fafc") : (isLight ? "#475569" : "#cbd5e1");
+          ctx.fillStyle = r.big_seller ? (isLight ? "#0f172a" : "#e6edf3") : (isLight ? "#475569" : "#b1bac4");
           ctx.font = r.big_seller
-            ? "bold 11px ui-monospace, SFMono-Regular, Menlo, monospace"
-            : "10.5px ui-monospace, SFMono-Regular, Menlo, monospace";
-          ctx.fillText(fmtInt(r.sell_lots), rightBarEdge + 5, y + 3.5);
+            ? "bold 11.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+            : "11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+          ctx.fillText(fmtInt(r.sell_lots), rightBarEdge + 5, y + 4);
         }
-        if (r.pulled_sell >= 10) {
-          const rad = Math.min(5.5, 2.0 + Math.sqrt(r.pulled_sell) * 0.21);
-          ctx.beginPath();
-          ctx.arc(sellDotX, y, rad, 0, Math.PI * 2);
-          ctx.fillStyle = "rgba(217, 155, 56, 0.65)";
-          ctx.fill();
+        if (r.pulled_sell >= 12) {
+          drawGlowDot(sellDotX, y, r.pulled_sell);
         }
 
-        // 4. RIGHT CALLOUTS ("Big Sellers", "Big Buyers", "12 sold", "14 bought", "536 pulled")
+        // 4. RIGHT CALLOUTS ("Big Sellers", "Big Buyers", "12 sold", "14 bought", "536 pulled" gold / "10 pulled" muted)
         ctx.textAlign = "left";
         let tx = calloutX;
-        if (r.big_seller && tx < W - 45) {
-          ctx.font = "bold 10px -apple-system, BlinkMacSystemFont, sans-serif";
-          ctx.fillStyle = "#eb7a61";
-          ctx.fillText("Big Sellers", tx, y + 3.5);
-          tx += ctx.measureText("Big Sellers").width + 6;
-        } else if (r.big_buyer && tx < W - 45) {
-          ctx.font = "bold 10px -apple-system, BlinkMacSystemFont, sans-serif";
-          ctx.fillStyle = "#58c977";
-          ctx.fillText("Big Buyers", tx, y + 3.5);
-          tx += ctx.measureText("Big Buyers").width + 6;
+        if (r.big_buyer && (!r.big_seller || r.buy_lots >= r.sell_lots) && tx < W - 45) {
+          ctx.font = "bold 11px -apple-system, BlinkMacSystemFont, sans-serif";
+          ctx.fillStyle = "#5dc46b";
+          ctx.fillText("Big Buyers", tx, y + 4);
+          tx += ctx.measureText("Big Buyers").width + 7;
+        } else if (r.big_seller && tx < W - 45) {
+          ctx.font = "bold 11px -apple-system, BlinkMacSystemFont, sans-serif";
+          ctx.fillStyle = "#e56d56";
+          ctx.fillText("Big Sellers", tx, y + 4);
+          tx += ctx.measureText("Big Sellers").width + 7;
         }
 
         if (r.sold_lots >= 5 && r.sold_lots >= r.bought_lots && tx < W - 38) {
           const sTxt = `${fmtInt(r.sold_lots)} sold`;
-          ctx.font = "600 10px -apple-system, BlinkMacSystemFont, sans-serif";
-          ctx.fillStyle = "#df7057";
-          ctx.fillText(sTxt, tx, y + 3.5);
-          tx += ctx.measureText(sTxt).width + 6;
+          ctx.font = "600 11px -apple-system, BlinkMacSystemFont, sans-serif";
+          ctx.fillStyle = "#d96d55";
+          ctx.fillText(sTxt, tx, y + 4);
+          tx += ctx.measureText(sTxt).width + 7;
         } else if (r.bought_lots >= 5 && tx < W - 38) {
           const bTxt = `${fmtInt(r.bought_lots)} bought`;
-          ctx.font = "600 10px -apple-system, BlinkMacSystemFont, sans-serif";
-          ctx.fillStyle = "#58c977";
-          ctx.fillText(bTxt, tx, y + 3.5);
-          tx += ctx.measureText(bTxt).width + 6;
+          ctx.font = "600 11px -apple-system, BlinkMacSystemFont, sans-serif";
+          ctx.fillStyle = "#5dc46b";
+          ctx.fillText(bTxt, tx, y + 4);
+          tx += ctx.measureText(bTxt).width + 7;
         }
 
-        if (r.pulled_total >= 8 && tx < W - 38) {
+        if (r.pulled_total >= 8 && tx < W - 36) {
           const pTxt = `${fmtInt(r.pulled_total)} pulled`;
-          ctx.font = "bold 10px -apple-system, BlinkMacSystemFont, sans-serif";
-          ctx.fillStyle = "#e0a33c";
-          ctx.fillText(pTxt, tx, y + 3.5);
+          if (r.pulled_total >= 25) {
+            ctx.font = "bold 11px -apple-system, BlinkMacSystemFont, sans-serif";
+            ctx.fillStyle = "#dfa03b";
+          } else {
+            ctx.font = "500 10.5px -apple-system, BlinkMacSystemFont, sans-serif";
+            ctx.fillStyle = "#6e7681";
+          }
+          ctx.fillText(pTxt, tx, y + 4);
         }
       }
       ctx.textAlign = "left";

@@ -238,10 +238,10 @@ def build_grouped_ladder(
     bs = max(0.5, float(band_size or 1.0))
 
     def snap_bid(p: float) -> float:
-        return round(math.floor(round(p / bs, 6)) * bs, 2)
+        return round(round(p / bs) * bs, 2)
 
     def snap_ask(p: float) -> float:
-        return round(math.ceil(round(p / bs, 6)) * bs, 2)
+        return round(round(p / bs) * bs, 2)
 
     buy_bands: dict[float, float] = {}
     sell_bands: dict[float, float] = {}
@@ -488,10 +488,10 @@ class MarketScreenEngine:
                     dct[k] = nv
 
         def snap_bid(p: float) -> float:
-            return round(math.floor(round(p / bs, 6)) * bs, 2)
+            return round(round(p / bs) * bs, 2)
 
         def snap_ask(p: float) -> float:
-            return round(math.ceil(round(p / bs, 6)) * bs, 2)
+            return round(round(p / bs) * bs, 2)
 
         curr_buy: dict[float, float] = {}
         curr_sell: dict[float, float] = {}
@@ -766,28 +766,31 @@ class MarketScreenEngine:
         w = int(defaults.get("big_band", 5))
         c = int(round(center / w) * w)
         now = time.time()
-        # Seed realistic multi-minute resting walls so Demo Mode looks authentic immediately
+        # Seed realistic multi-minute resting walls matching exact institutional NIFTY DOM profile
         self._demo_walls_buy = {
-            c - 1 * w: random.randint(680, 1120),  # Prominent active Big Buyer wall right at best bid band!
-            c - 3 * w: random.randint(65, 115),
-            c - 5 * w: random.randint(45, 85),
+            c: random.randint(880, 1180),          # Massive Big Buyer wall right at active LTP band!
+            c - 3 * w: random.randint(52, 78),
+            c - 4 * w: random.randint(35, 58),
+            c - 5 * w: random.randint(38, 62),
         }
         self._demo_walls_sell = {
-            c + 1 * w: random.randint(85, 135),
-            c + 2 * w: random.randint(95, 145),
-            c + 4 * w: random.randint(65, 110),
-            c + 7 * w: random.randint(115, 165),
-            c + 8 * w: random.randint(75, 125),
+            c: random.randint(85, 130),            # Active ask resistance right at LTP band!
+            c + 1 * w: random.randint(75, 115),
+            c + 4 * w: random.randint(55, 80),
+            c + 7 * w: random.randint(105, 145),
+            c + 8 * w: random.randint(65, 95),
         }
         # Pre-seed realistic pulled/bought/sold order-flow activity on startup
         if not self._pulled_sell and not self._pulled_buy:
-            self._pulled_sell[float(c + 1 * w)] = float(random.randint(240, 520))
-            self._pulled_sell[float(c + 2 * w)] = float(random.randint(95, 210))
-            self._pulled_buy[float(c - 2 * w)] = float(random.randint(140, 290))
-            self._pulled_buy[float(c - 3 * w)] = float(random.randint(90, 220))
-            self._pulled_buy[float(c - 4 * w)] = float(random.randint(60, 180))
-            self._sold_lots[float(c)] = float(random.randint(10, 28))
-            self._bought_lots[float(c + 1 * w)] = float(random.randint(12, 34))
+            self._pulled_sell[float(c)] = float(random.randint(55, 95))
+            self._pulled_sell[float(c + 1 * w)] = float(random.randint(380, 560))
+            self._pulled_sell[float(c + 2 * w)] = float(random.randint(120, 210))
+            self._pulled_buy[float(c - 3 * w)] = float(random.randint(170, 260))
+            self._pulled_buy[float(c - 4 * w)] = float(random.randint(110, 180))
+            self._pulled_buy[float(c - 5 * w)] = float(random.randint(190, 320))
+            self._pulled_buy[float(c - 6 * w)] = float(random.randint(24, 48))
+            self._pulled_buy[float(c - 8 * w)] = float(random.randint(8, 16))
+            self._sold_lots[float(c)] = float(random.randint(10, 24))
         # Pre-seed realistic resting ages on initial startup
         if not self._resting_walls:
             for bp, bl in self._demo_walls_buy.items():
@@ -812,56 +815,40 @@ class MarketScreenEngine:
         w = int(defaults.get("big_band", 5))
 
         # Gentle wandering price with subtle bounce off resting walls
-        drift = (defaults["base_price"] - self.mid_price) * 0.03
-        move = random.gauss(drift, 0.75 * step_scale)
+        drift = (defaults["base_price"] - self.mid_price) * 0.04
+        move = random.gauss(drift, 0.45 * step_scale)
         self.mid_price = round(self.mid_price + move, 2)
-        half_spread = random.choice([0.5, 1.0, 1.5]) * step_scale
-        anchor = round(self.mid_price * 2) / 2.0
+        half_spread = random.choice([0.4, 0.6, 1.0]) * step_scale
+        anchor = round(self.mid_price / w) * w
 
         self.best_bid = round(anchor - half_spread, 2)
         self.best_ask = round(anchor + half_spread, 2)
-        self.ltp = round(random.choice([self.best_bid, self.best_ask, anchor]), 2)
+        self.ltp = round(random.choice([self.best_bid, self.best_ask, float(anchor)]), 2)
         self.spot_basis = float(defaults.get("demo_basis", 6.5))
         self.spot_price = round(anchor - self.spot_basis, 2)
 
-        # Rotate only 1 wall rarely (~1.5% chance/sec) so most walls genuinely rest for minutes
-        if not self._demo_walls_buy:
+        # Keep demo walls anchored around current price band
+        if not self._demo_walls_buy or (anchor not in self._demo_walls_buy and random.random() < 0.25):
             self._refresh_demo_walls(anchor)
-        elif random.random() < 0.015:
-            c = int(round(anchor / w) * w)
-            if random.random() < 0.5 and self._demo_walls_buy:
-                old_k = random.choice(list(self._demo_walls_buy.keys()))
-                self._demo_walls_buy.pop(old_k, None)
-                self._demo_walls_buy[c - random.choice([1, 2, 3, 5]) * w] = random.randint(150, 290)
-            elif self._demo_walls_sell:
-                old_k = random.choice(list(self._demo_walls_sell.keys()))
-                self._demo_walls_sell.pop(old_k, None)
-                self._demo_walls_sell[c + random.choice([1, 2, 3, 5]) * w] = random.randint(150, 290)
 
         bids = []
         asks = []
-        level_step = max(1.0, w / 2.0)
-        used_buy_walls = set()
-        used_sell_walls = set()
-        for idx in range(DEMO_LEVELS):
-            bp = round(self.best_bid - idx * level_step, 2)
-            ap = round(self.best_ask + idx * level_step, 2)
+        # Populate 11 distinct 5-pt bands on each side (leaving natural 1-band spread gap below LTP when realistic)
+        for idx in range(11):
+            b_band = anchor if idx == 0 else (anchor - (idx + 1) * w)
+            s_band = anchor + idx * w
+            bp = round(b_band - 0.2, 2) if idx == 0 else float(b_band)
+            ap = round(s_band + 0.2, 2) if idx == 0 else float(s_band)
 
-            b_band = int(math.floor(round(bp / w, 6)) * w)
-            s_band = int(math.ceil(round(ap / w, 6)) * w)
+            if b_band in self._demo_walls_buy:
+                b_lots = max(6, int(self._demo_walls_buy[b_band] * random.uniform(0.985, 1.015)))
+            else:
+                b_lots = random.randint(6, 38)
 
-            b_extra = 0
-            if b_band in self._demo_walls_buy and b_band not in used_buy_walls:
-                used_buy_walls.add(b_band)
-                b_extra = int(self._demo_walls_buy[b_band] * random.uniform(0.985, 1.015))
-
-            s_extra = 0
-            if s_band in self._demo_walls_sell and s_band not in used_sell_walls:
-                used_sell_walls.add(s_band)
-                s_extra = int(self._demo_walls_sell[s_band] * random.uniform(0.985, 1.015))
-
-            b_lots = max(3, random.randint(7, 11) + b_extra)
-            s_lots = max(3, random.randint(7, 11) + s_extra)
+            if s_band in self._demo_walls_sell:
+                s_lots = max(12, int(self._demo_walls_sell[s_band] * random.uniform(0.985, 1.015)))
+            else:
+                s_lots = random.randint(15, 66)
 
             bids.append((bp, b_lots * lot_sz))
             asks.append((ap, s_lots * lot_sz))
