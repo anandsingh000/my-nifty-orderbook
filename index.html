@@ -610,7 +610,8 @@
        TAB 1: UNIFIED 1-MIN CANDLES + LIVE ORDER BOOK FLOW (GIF Design)
        ======================================================================== */
     .orderflow-workspace {
-      grid-template-columns: 1.06fr 1.30fr 1.02fr;
+      gap: 0;
+      grid-template-columns: var(--c1, 1.06fr) 8px var(--c2, 1.30fr) 8px var(--c3, 1.02fr);
     }
     .flow-panel {
       background: #07090d;
@@ -677,7 +678,8 @@
       display: none;
     }
     .big-workspace {
-      grid-template-columns: 390px 1.25fr 1fr;
+      gap: 0;
+      grid-template-columns: var(--c1, 0.94fr) 8px var(--c2, 1.30fr) 8px var(--c3, 1.0fr);
     }
 
     .bo-card-shell {
@@ -900,12 +902,40 @@
       touch-action: none;
     }
 
+    /* Draggable Vertical Splitters Between Boxes */
+    .col-resizer {
+      width: 8px;
+      cursor: col-resize;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      touch-action: none;
+      position: relative;
+      z-index: 5;
+    }
+    .col-resizer::after {
+      content: "";
+      width: 3px;
+      height: 36px;
+      border-radius: 3px;
+      background: rgba(148, 163, 184, 0.22);
+      transition: background 0.12s, height 0.12s;
+    }
+    .col-resizer:hover::after,
+    .col-resizer.dragging::after {
+      background: #3b82f6;
+      height: 64px;
+    }
+
     @media (max-width: 1080px) {
       body { overflow: auto; height: auto; }
-      .workspace {
-        grid-template-columns: 1fr;
+      .workspace, .orderflow-workspace, .big-workspace {
+        grid-template-columns: 1fr !important;
+        gap: 8px;
         height: auto;
       }
+      .col-resizer { display: none; }
       .panel, .bo-card-shell { height: 540px; }
     }
   </style>
@@ -1017,6 +1047,8 @@
       </div>
     </section>
 
+    <div class="col-resizer" data-ws="tabOrderBook" data-idx="0" title="Drag left/right to resize boxes (Double-click to reset)"></div>
+
     <!-- BOX 2 (CENTER): SEPARATE GIF-STYLE LIVE ORDER BOOK (Waiting · Bought/Sold · Pulled) -->
     <section class="panel flow-panel" id="bookPanel">
       <div class="panel-header flow-header">
@@ -1056,6 +1088,8 @@
         </div>
       </div>
     </section>
+
+    <div class="col-resizer" data-ws="tabOrderBook" data-idx="1" title="Drag left/right to resize boxes (Double-click to reset)"></div>
 
     <!-- BOX 3 (RIGHT): SEPARATE OPTION OPEN INTEREST -->
     <section class="panel" id="oiPanel">
@@ -1137,6 +1171,8 @@
       </div>
     </section>
 
+    <div class="col-resizer" data-ws="tabBigOrders" data-idx="0" title="Drag left/right to resize boxes (Double-click to reset)"></div>
+
     <!-- 2. CENTER PANEL: 1-Minute Candles with Resting Wall Zones Overlaid -->
     <section class="panel">
       <div class="panel-header">
@@ -1160,6 +1196,8 @@
         <span id="boUsualBandLabel">Usual band ≈ — lots</span>
       </div>
     </section>
+
+    <div class="col-resizer" data-ws="tabBigOrders" data-idx="1" title="Drag left/right to resize boxes (Double-click to reset)"></div>
 
     <!-- 3. RIGHT PANEL: Strike OI Alignment & Resting Wall Log -->
     <section class="panel">
@@ -2688,6 +2726,95 @@
     bindBrokerChart("candleCanvas", "ob");
     bindBrokerChart("bookCanvas", "dom");
     bindBrokerChart("boZoneCanvas", "bo");
+
+    // ========================================================================
+    // DRAGGABLE BOX RESIZERS (Shrink / Enlarge any box + persist in browser)
+    // ========================================================================
+    (function initBoxResizers() {
+      const applyRatios = (wsId, ratios) => {
+        const ws = document.getElementById(wsId);
+        if (!ws || !Array.isArray(ratios) || ratios.length !== 3) return;
+        ws.style.setProperty("--c1", `${ratios[0].toFixed(4)}fr`);
+        ws.style.setProperty("--c2", `${ratios[1].toFixed(4)}fr`);
+        ws.style.setProperty("--c3", `${ratios[2].toFixed(4)}fr`);
+      };
+
+      for (const wsId of ["tabOrderBook", "tabBigOrders"]) {
+        try {
+          const saved = JSON.parse(localStorage.getItem(`boxSplit_${wsId}`) || "null");
+          if (saved && saved.length === 3 && saved.every((n) => Number.isFinite(n) && n > 0.05)) {
+            applyRatios(wsId, saved);
+          }
+        } catch (_e) {}
+      }
+
+      let activeResize = null;
+
+      document.querySelectorAll(".col-resizer").forEach((handle) => {
+        handle.addEventListener("mousedown", (ev) => {
+          ev.preventDefault();
+          const wsId = handle.getAttribute("data-ws");
+          const idx = Number(handle.getAttribute("data-idx") || 0);
+          const ws = document.getElementById(wsId);
+          if (!ws) return;
+
+          const boxes = Array.from(ws.children).filter((el) => !el.classList.contains("col-resizer"));
+          if (boxes.length !== 3) return;
+
+          const widths = boxes.map((b) => b.getBoundingClientRect().width);
+          handle.classList.add("dragging");
+          document.body.style.cursor = "col-resize";
+
+          activeResize = {
+            handle,
+            wsId,
+            idx,
+            startX: ev.clientX,
+            startWidths: widths,
+            totalW: widths[0] + widths[1] + widths[2],
+          };
+        });
+
+        handle.addEventListener("dblclick", () => {
+          const wsId = handle.getAttribute("data-ws");
+          const ws = document.getElementById(wsId);
+          if (!ws) return;
+          ws.style.removeProperty("--c1");
+          ws.style.removeProperty("--c2");
+          ws.style.removeProperty("--c3");
+          try { localStorage.removeItem(`boxSplit_${wsId}`); } catch (_e) {}
+          if (latestState) renderAll(latestState);
+        });
+      });
+
+      window.addEventListener("mousemove", (ev) => {
+        if (!activeResize) return;
+        const { wsId, idx, startX, startWidths, totalW } = activeResize;
+        const minW = 190;
+        const pairSum = startWidths[idx] + startWidths[idx + 1];
+        let dx = ev.clientX - startX;
+
+        let newLeft = startWidths[idx] + dx;
+        newLeft = Math.max(minW, Math.min(pairSum - minW, newLeft));
+        const newRight = pairSum - newLeft;
+
+        const nextW = [...startWidths];
+        nextW[idx] = newLeft;
+        nextW[idx + 1] = newRight;
+
+        const ratios = nextW.map((w) => (w / Math.max(1, totalW)) * 3.0);
+        applyRatios(wsId, ratios);
+        try { localStorage.setItem(`boxSplit_${wsId}`, JSON.stringify(ratios)); } catch (_e) {}
+        if (latestState) renderAll(latestState);
+      });
+
+      window.addEventListener("mouseup", () => {
+        if (!activeResize) return;
+        activeResize.handle.classList.remove("dragging");
+        document.body.style.cursor = "";
+        activeResize = null;
+      });
+    })();
 
     window.addEventListener("resize", () => {
       if (!latestState) return;
