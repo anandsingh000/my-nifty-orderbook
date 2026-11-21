@@ -607,6 +607,73 @@
     }
 
     /* ========================================================================
+       TAB 1: UNIFIED 1-MIN CANDLES + LIVE ORDER BOOK FLOW (GIF Design)
+       ======================================================================== */
+    .orderflow-workspace {
+      grid-template-columns: 2.25fr 1.02fr;
+    }
+    .orderflow-workspace.oi-hidden {
+      grid-template-columns: 1fr;
+    }
+    .flow-panel {
+      background: #07090d;
+      border-color: #192231;
+    }
+    html[data-theme="light"] .flow-panel {
+      background: #ffffff;
+      border-color: #cbd5e1;
+    }
+    .flow-header {
+      background: #0b0f16;
+      border-bottom: 1px solid #161e2b;
+      padding: 8px 14px;
+    }
+    html[data-theme="light"] .flow-header {
+      background: #f1f5f9;
+      border-bottom-color: #e2e8f0;
+    }
+    .flow-title {
+      font-size: 13.5px;
+      font-weight: 800;
+      letter-spacing: -0.1px;
+    }
+    .flow-legend-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 6px 14px;
+      background: #07090d;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+      font-size: 11.5px;
+      color: #9ca3af;
+    }
+    html[data-theme="light"] .flow-legend-bar {
+      background: #f8fafc;
+      color: #475569;
+    }
+    .flow-legend-items {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .flow-leg-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .leg-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .leg-buy { background: #58c977; }
+    .leg-sell { background: #df6b53; }
+    .leg-pull { background: #eab308; }
+
+    /* ========================================================================
        TAB 2: "BIG ORDERS RIGHT NOW" (Exact match to reference card + context)
        ======================================================================== */
     .workspace.hidden-tab {
@@ -924,58 +991,56 @@
     </div>
   </div>
 
-  <!-- TAB 1: MAIN 3-PANEL ORDER BOOK SCREEN -->
-  <main class="workspace" id="tabOrderBook">
+  <!-- TAB 1: UNIFIED 1-MIN CANDLES & LIVE ORDER-FLOW LADDER + OPTION OI -->
+  <main class="workspace orderflow-workspace" id="tabOrderBook">
 
-    <!-- 1. LEFT: 1-MINUTE CANDLES (Synced on exact same price scale as Order Book) -->
-    <section class="panel">
-      <div class="panel-header">
-        <span>1-Minute Candles</span>
+    <!-- 1. LEFT/CENTER UNIFIED FLOW PANEL: Exact GIF Design (Candles + 5-pt Order Book + Pulled/Bought/Sold) -->
+    <section class="panel flow-panel" id="flowPanel">
+      <div class="panel-header flow-header">
+        <span class="flow-title" id="flowTitle">1-min candles and order book (lots waiting, per 5 points)</span>
         <div class="chart-tools">
-          <button class="chart-tool-btn" onclick="zoomChart('ob', 1.25)" title="Zoom Out (Scroll Down)">−</button>
-          <button class="chart-tool-btn" onclick="zoomChart('ob', 0.8)" title="Zoom In (Scroll Up)">+</button>
-          <button class="chart-tool-btn active" id="btnObAuto" onclick="resetChart('ob')" title="Reset & Sync to Order Book (Double-click chart)">Auto</button>
+          <span id="ohlcHover" style="font-size:11px; color:var(--text-secondary); margin-right:8px; font-weight:500;">Scroll = Zoom · Drag = Pan</span>
+          <button class="chart-tool-btn" onclick="zoomChart('ob', 1.22)" title="Zoom Out (Scroll Down)">−</button>
+          <button class="chart-tool-btn" onclick="zoomChart('ob', 0.82)" title="Zoom In (Scroll Up)">+</button>
+          <button class="chart-tool-btn active" id="btnObAuto" onclick="resetChart('ob')" title="Reset live centered view (or Double-click)">Auto</button>
+          <button class="chart-tool-btn" id="btnToggleOi" onclick="toggleOiPanel()" title="Expand Order Flow full screen or show Option OI">Hide OI</button>
         </div>
       </div>
-      <div class="sync-subheader">
-        <span id="ohlcHover">Scroll = Zoom · Drag = Pan</span>
-        <span id="scaleRangeLabel">Range: —</span>
+
+      <div class="flow-legend-bar">
+        <div class="flow-legend-items">
+          <span class="flow-leg-item"><span class="leg-dot leg-buy"></span>buyers waiting · bought</span>
+          <span class="flow-leg-item"><span class="leg-dot leg-sell"></span>sellers waiting · sold</span>
+          <span class="flow-leg-item"><span class="leg-dot leg-pull"></span>pulled (cancelled)</span>
+        </div>
+        <span id="formingCandleLbl" style="color:#94a3b8; font-variant-numeric:tabular-nums;">forming candle · 0s into the min</span>
       </div>
+
       <div class="sync-body">
         <canvas id="candleCanvas"></canvas>
       </div>
-      <div class="sync-footer">
-        <span id="candleCountLabel">0 candles</span>
-        <span>Built from (Best Bid + Best Ask) ÷ 2</span>
-      </div>
-    </section>
 
-    <!-- 2. CENTER: ORDER BOOK LADDER (Buy Green Left | Price Center | Sell Red Right) -->
-    <section class="panel">
-      <div class="panel-header">
-        <span>Order Book (Lots)</span>
-        <span class="panel-sub" id="bookMeta">Top 3 largest bands solid &amp; labelled</span>
-      </div>
-      <div class="sync-subheader">
-        <span style="color:var(--buy-text); font-weight:700;" id="totBuyLabel">Buy: 0 lots</span>
-        <div class="imbalance-wrap">
-          <div class="imbalance-bar">
-            <div class="imbalance-buy" id="imbalanceFill" style="width:50%"></div>
+      <div class="sync-footer" style="background:#0b0f16; border-top-color:#161e2b;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="color:#58c977; font-weight:700;" id="totBuyLabel">Buy: 0 lots</span>
+          <div style="width:90px;">
+            <div class="imbalance-bar">
+              <div class="imbalance-buy" id="imbalanceFill" style="width:50%"></div>
+            </div>
           </div>
+          <span style="color:#df6b53; font-weight:700;" id="totSellLabel">Sell: 0 lots</span>
+          <span style="color:var(--text-muted); margin-left:6px;" id="candleCountLabel">0 candles</span>
         </div>
-        <span style="color:var(--sell-text); font-weight:700;" id="totSellLabel">Sell: 0 lots</span>
-      </div>
-      <div class="sync-body">
-        <div class="book-ladder" id="bookLadder"></div>
-      </div>
-      <div class="sync-footer">
-        <span style="color:var(--buy-text);" id="topBuyWallLabel">#1 Buy Wall: —</span>
-        <span style="color:var(--sell-text);" id="topSellWallLabel">#1 Sell Wall: —</span>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span style="color:#58c977;" id="topBuyWallLabel">#1 Buy: —</span>
+          <span style="color:#df6b53;" id="topSellWallLabel">#1 Sell: —</span>
+          <span style="color:var(--text-muted);" id="scaleRangeLabel">—</span>
+        </div>
       </div>
     </section>
 
-    <!-- 3. RIGHT: OPTION OPEN INTEREST NEAR PRICE -->
-    <section class="panel">
+    <!-- 2. RIGHT: OPTION OPEN INTEREST NEAR PRICE -->
+    <section class="panel" id="oiPanel">
       <div class="panel-header">
         <span>Option Open Interest (Lots)</span>
         <span class="panel-sub" id="oiRefreshMeta">Refreshes every 60s</span>
@@ -1115,11 +1180,24 @@
     let centeredOiOnce = false;
     let lastChartSymbol = "";
 
-    // Interactive TradingView / Broker-style chart viewports ("ob" = Order Book tab, "bo" = Big Orders tab)
+    // Interactive TradingView / Broker-style chart viewports ("ob" = Unified Candles + Order Book, "bo" = Big Orders tab)
     const chartViews = {
-      ob: { defaultBars: 50, visibleBars: 50, panBars: 0, yZoom: 1.0, yPanPts: 0, hoverX: -1, hoverY: -1, dragging: false },
+      ob: { defaultBars: 34, visibleBars: 34, panBars: 0, yZoom: 1.0, yPanPts: 0, hoverX: -1, hoverY: -1, dragging: false },
       bo: { defaultBars: 75, visibleBars: 75, panBars: 0, yZoom: 1.0, yPanPts: 0, hoverX: -1, hoverY: -1, dragging: false },
     };
+    let oiHidden = false;
+
+    function toggleOiPanel() {
+      oiHidden = !oiHidden;
+      document.getElementById("tabOrderBook").classList.toggle("oi-hidden", oiHidden);
+      document.getElementById("oiPanel").style.display = oiHidden ? "none" : "flex";
+      const btn = document.getElementById("btnToggleOi");
+      if (btn) {
+        btn.textContent = oiHidden ? "Show OI" : "Hide OI";
+        btn.classList.toggle("active", oiHidden);
+      }
+      if (latestState) renderAll(latestState);
+    }
 
     function isChartAuto(key) {
       const v = chartViews[key];
@@ -1431,12 +1509,17 @@
       maybeBeepForLargeWall(state);
     }
 
-    function renderOrderBook(state, displayLadder) {
+    function renderOrderBook(state, _displayLadder) {
       const book = state.book || {};
-      const rows = displayLadder.rows || [];
-      const maxLots = Math.max(1, book.max_band_lots || 1);
-      const bs = Number(state.band_size || 1);
-      const mid = Number(state.mid_price || 0);
+      const bs = Number(state.band_size || 5);
+      const ptsWord = bs === 1 ? "1 point" : `${bs} points`;
+
+      document.getElementById("flowTitle").textContent =
+        `1-min candles and order book (lots waiting, per ${ptsWord})`;
+
+      const secInto = Number(state.candle_sec_into_min ?? (new Date().getSeconds()));
+      document.getElementById("formingCandleLbl").textContent =
+        `forming candle · ${secInto}s into the min`;
 
       const totBuy = book.total_buy_lots || 0;
       const totSell = book.total_sell_lots || 0;
@@ -1446,50 +1529,20 @@
       document.getElementById("totBuyLabel").textContent = `Buy: ${fmtLots(totBuy)} lots`;
       document.getElementById("totSellLabel").textContent = `Sell: ${fmtLots(totSell)} lots`;
       document.getElementById("imbalanceFill").style.width = `${buyPct.toFixed(1)}%`;
-      document.getElementById("bookMeta").textContent = `${bs}-pt bands · Lot=${state.lot_size} · Top ${state.highlight_top_n} solid`;
 
       const topB = (book.top_buy_bands || [])[0];
       const topS = (book.top_sell_bands || [])[0];
       document.getElementById("topBuyWallLabel").textContent = topB
-        ? `#1 Buy: ${fmtLots(topB.lots)} lots @ ${topB.price}`
-        : "#1 Buy Wall: —";
+        ? `#1 Buy: ${fmtLots(topB.lots)} @ ${fmtInt(topB.price)}`
+        : "#1 Buy: —";
       document.getElementById("topSellWallLabel").textContent = topS
-        ? `#1 Sell: ${fmtLots(topS.lots)} lots @ ${topS.price}`
-        : "#1 Sell Wall: —";
-
-      const container = document.getElementById("bookLadder");
-      const html = rows.map((r) => {
-        const isMid = Math.abs(r.price - mid) <= bs * 0.51;
-        const bPct = r.buy_lots > 0 ? Math.min(100, (r.buy_lots / maxLots) * 100) : 0;
-        const sPct = r.sell_lots > 0 ? Math.min(100, (r.sell_lots / maxLots) * 100) : 0;
-
-        const buyBadge = r.buy_rank > 0 ? `<span class="rank-tag">#${r.buy_rank}</span>` : "";
-        const sellBadge = r.sell_rank > 0 ? `<span class="rank-tag">#${r.sell_rank}</span>` : "";
-
-        const buyContent = r.buy_lots > 0
-          ? `<div class="depth-bar ${r.buy_highlight ? "solid" : ""}" style="width:${bPct.toFixed(1)}%"></div>
-             <span class="lot-label ${r.buy_highlight ? "solid-label" : ""}">${buyBadge}${fmtLots(r.buy_lots)}</span>`
-          : "";
-
-        const sellContent = r.sell_lots > 0
-          ? `<div class="depth-bar ${r.sell_highlight ? "solid" : ""}" style="width:${sPct.toFixed(1)}%"></div>
-             <span class="lot-label ${r.sell_highlight ? "solid-label" : ""}">${fmtLots(r.sell_lots)}${sellBadge}</span>`
-          : "";
-
-        const pLabel = Number.isInteger(r.price) ? r.price.toLocaleString("en-IN") : r.price.toFixed(1);
-
-        return `<div class="book-row ${isMid ? "is-mid" : ""}">
-          <div class="book-side buy">${buyContent}</div>
-          <div class="price-cell">${pLabel}</div>
-          <div class="book-side sell">${sellContent}</div>
-        </div>`;
-      }).join("");
-
-      container.innerHTML = html;
+        ? `#1 Sell: ${fmtLots(topS.lots)} @ ${fmtInt(topS.price)}`
+        : "#1 Sell: —";
     }
 
-    function drawCandles(state, displayLadder) {
+    function drawCandles(state, _displayLadder) {
       const canvas = document.getElementById("candleCanvas");
+      if (!canvas || !canvas.parentElement) return;
       const rect = canvas.parentElement.getBoundingClientRect();
       if (rect.width < 10 || rect.height < 10) return;
 
@@ -1504,173 +1557,370 @@
       const H = rect.height;
       ctx.clearRect(0, 0, W, H);
 
+      const isLight = document.documentElement.getAttribute("data-theme") === "light";
       const view = chartViews.ob;
       const autoBtn = document.getElementById("btnObAuto");
-      if (autoBtn) autoBtn.classList.toggle("active", isChartAuto("ob") && syncPriceScale);
-
-      const styles = getComputedStyle(document.documentElement);
-      const borderCol = styles.getPropertyValue("--border-subtle").trim() || "#1f2b3e";
-      const mutedCol = styles.getPropertyValue("--text-muted").trim() || "#64748b";
-      const panelAlt = styles.getPropertyValue("--bg-panel-alt").trim() || "#161f2e";
+      if (autoBtn) autoBtn.classList.toggle("active", isChartAuto("ob"));
 
       const allCandles = state.candles || [];
-      document.getElementById("candleCountLabel").textContent = `${allCandles.length} × 1-min candles`;
-      if (!allCandles.length) return;
+      document.getElementById("candleCountLabel").textContent = `${allCandles.length} × 1m`;
 
-      const leftPad = 52;
-      const rightPad = 8;
-      const bottomPad = 18;
-      const plotW = Math.max(40, W - leftPad - rightPad);
-      const isLadderLocked = syncPriceScale && Math.abs(view.yZoom - 1.0) < 0.02 && Math.abs(view.yPanPts) < 0.2 && displayLadder.rows.length > 0;
-      const plotH = isLadderLocked ? H : Math.max(40, H - bottomPad);
+      const bs = Math.max(0.5, Number(state.band_size || 5));
+      const mid = Number(state.mid_price || state.ltp || 25000);
+      const ltp = Number(state.ltp || mid);
+      const centerSnap = Math.round(mid / bs) * bs;
 
-      const bars = Math.max(12, Math.min(380, view.visibleBars));
-      const maxPan = Math.max(0, allCandles.length - 5);
-      view.panBars = Math.max(-bars * 0.4, Math.min(maxPan, view.panBars));
-
-      const rightPadBars = view.panBars === 0 ? 2 : 0;
-      const rightEdgeBar = (allCandles.length - 1) + rightPadBars - view.panBars;
-      const leftEdgeBar = rightEdgeBar - bars;
-      const slotW = plotW / bars;
-
-      const visStart = Math.max(0, Math.floor(leftEdgeBar));
-      const visEnd = Math.min(allCandles.length - 1, Math.ceil(rightEdgeBar));
-      const visCandles = allCandles.slice(visStart, visEnd + 1);
-
-      // Determine Y-axis price bounds
-      let highP, lowP;
-      if (isLadderLocked) {
-        highP = displayLadder.highEdge;
-        lowP = displayLadder.lowEdge;
-      } else {
-        const pool = visCandles.length ? visCandles : allCandles.slice(-40);
-        const rawHi = Math.max(...pool.map((c) => c.high), state.mid_price + 10);
-        const rawLo = Math.min(...pool.map((c) => c.low), state.mid_price - 10);
-        const minSpan = state.symbol === "SENSEX" ? 300 : (state.symbol === "BANKNIFTY" ? 220 : 95);
-        const baseSpan = Math.max(minSpan, (rawHi - rawLo) * 1.18);
-        const spanNow = baseSpan * view.yZoom;
-        const center = ((rawHi + rawLo) / 2) + view.yPanPts;
-        highP = center + spanNow / 2;
-        lowP = center - spanNow / 2;
-      }
-
-      document.getElementById("scaleRangeLabel").textContent = `${lowP.toFixed(0)} – ${highP.toFixed(0)}`;
-
-      const span = Math.max(0.5, highP - lowP);
+      // Vertical layout: Default 23 bands visible (exact ~22-row spacing of GIF!), zoomable via wheel or dragging price spine
+      const bottomPad = 20;
+      const plotH = Math.max(80, H - bottomPad);
+      const baseSpan = 23 * bs;
+      const span = Math.max(6 * bs, Math.min(90 * bs, baseSpan * view.yZoom));
+      const centerP = centerSnap + view.yPanPts;
+      const highP = centerP + span / 2;
+      const lowP = centerP - span / 2;
       const yOf = (p) => ((highP - p) / span) * plotH;
 
-      // Price strip subtle hover cue on left axis
-      if (view.hoverX >= 0 && view.hoverX <= leftPad) {
+      document.getElementById("scaleRangeLabel").textContent =
+        `${Math.round(lowP).toLocaleString("en-IN")}–${Math.round(highP).toLocaleString("en-IN")}`;
+
+      // Horizontal 5-zone seamless coordinates (Candles | Buy Bars & Dots | Price Spine | Sell Bars & Dots | Flow Callouts)
+      const candleLeft = 10;
+      const candleRight = Math.floor(W * 0.365);
+      const candlePlotW = Math.max(60, candleRight - candleLeft);
+
+      const priceX = Math.floor(W * 0.562);
+      const buyAnchorX = priceX - 30;
+      const sellAnchorX = priceX + 34;
+      const maxBarW = Math.max(58, Math.floor(W * 0.112));
+      const buyDotX = buyAnchorX - maxBarW - 34;
+      const sellDotX = sellAnchorX + maxBarW + 32;
+      const calloutX = sellDotX + 12;
+
+      // Subtle hover strip cue over center Price Spine when hovering to drag-zoom vertically
+      if (view.hoverX >= priceX - 28 && view.hoverX <= priceX + 32 && view.hoverY < plotH) {
         ctx.fillStyle = "rgba(148, 163, 184, 0.06)";
-        ctx.fillRect(0, 0, leftPad, plotH);
+        ctx.fillRect(priceX - 28, 0, 60, plotH);
       }
 
-      // Horizontal price grid
-      ctx.strokeStyle = borderCol;
-      ctx.lineWidth = 0.6;
-      ctx.fillStyle = mutedCol;
-      ctx.font = "10px -apple-system, BlinkMacSystemFont, sans-serif";
+      // ----------------------------------------------------------------------
+      // ZONE 1: 1-MINUTE CANDLES (Left side, exact same Y-axis as Order Book!)
+      // ----------------------------------------------------------------------
+      const bars = Math.max(12, Math.min(260, view.visibleBars));
+      const maxPan = Math.max(0, allCandles.length - 4);
+      view.panBars = Math.max(-bars * 0.35, Math.min(maxPan, view.panBars));
 
-      const bsGrid = Number(state.band_size || 5);
-      const step = isLadderLocked ? (bsGrid >= 5 ? bsGrid : 5) : chooseGridStep(span, plotH);
-      const firstGrid = Math.ceil(lowP / step) * step;
-      for (let gp = firstGrid; gp <= highP; gp += step) {
-        const y = yOf(gp);
-        if (y < 0 || y > plotH) continue;
+      const rightPadBars = view.panBars === 0 ? 1.5 : 0;
+      const rightEdgeBar = Math.max(0, allCandles.length - 1) + rightPadBars - view.panBars;
+      const leftEdgeBar = rightEdgeBar - bars;
+      const slotW = candlePlotW / bars;
+      const visStart = Math.max(0, Math.floor(leftEdgeBar));
+      const visEnd = Math.min(Math.max(0, allCandles.length - 1), Math.ceil(rightEdgeBar));
+
+      let lastCandleX = candleRight - 24;
+
+      if (allCandles.length) {
+        ctx.save();
         ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(W, y);
-        ctx.stroke();
-        ctx.fillText(gp.toLocaleString("en-IN"), 5, Math.max(10, y - 3));
-      }
+        ctx.rect(candleLeft, 0, candlePlotW + 8, plotH);
+        ctx.clip();
 
-      // Clip & draw candles
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(leftPad, 0, plotW, plotH);
-      ctx.clip();
+        const bodyW = Math.max(2.2, Math.min(10.5, slotW * 0.64));
+        for (let i = visStart; i <= visEnd; i++) {
+          const c = allCandles[i];
+          const cx = candleLeft + (i - leftEdgeBar + 0.5) * slotW;
+          if (i === allCandles.length - 1) lastCandleX = cx;
+          if (cx < candleLeft - slotW || cx > candleRight + slotW) continue;
 
-      const bodyW = Math.max(2, Math.min(13, slotW * 0.66));
-      const labelEvery = Math.max(4, Math.round(bars / 6));
+          const yO = yOf(c.open);
+          const yC = yOf(c.close);
+          const yH = yOf(c.high);
+          const yL = yOf(c.low);
+          const isUp = c.close >= c.open;
+          const col = isUp ? "#58c977" : "#df6b53";
 
-      for (let i = visStart; i <= visEnd; i++) {
-        const c = allCandles[i];
-        const cx = leftPad + (i - leftEdgeBar + 0.5) * slotW;
-        if (cx < leftPad - slotW || cx > leftPad + plotW + slotW) continue;
+          ctx.strokeStyle = col;
+          ctx.lineWidth = 1.25;
+          ctx.beginPath();
+          ctx.moveTo(cx, yH);
+          ctx.lineTo(cx, yL);
+          ctx.stroke();
 
-        const yO = yOf(c.open);
-        const yC = yOf(c.close);
-        const yH = yOf(c.high);
-        const yL = yOf(c.low);
-        const isUp = c.close >= c.open;
-        const col = isUp ? CANDLE_UP_COLOR : CANDLE_DOWN_COLOR;
+          const topY = Math.min(yO, yC);
+          const bh = Math.max(1.8, Math.abs(yC - yO));
+          ctx.fillStyle = col;
+          ctx.fillRect(cx - bodyW / 2, topY, bodyW, bh);
 
-        ctx.strokeStyle = col;
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.moveTo(cx, yH);
-        ctx.lineTo(cx, yL);
-        ctx.stroke();
+          // Highlight small amber outline on live forming candle just like GIF
+          if (i === allCandles.length - 1) {
+            ctx.strokeStyle = "#eab308";
+            ctx.lineWidth = 1;
+            ctx.strokeRect(cx - bodyW / 2 - 0.5, topY - 0.5, bodyW + 1, bh + 1);
+          }
+        }
+        ctx.restore();
 
-        const topY = Math.min(yO, yC);
-        const bh = Math.max(1.6, Math.abs(yC - yO));
-        ctx.fillStyle = col;
-        ctx.fillRect(cx - bodyW / 2, topY, bodyW, bh);
-      }
-      ctx.restore();
-
-      // Bottom timestamps
-      ctx.fillStyle = mutedCol;
-      ctx.font = "10px -apple-system, BlinkMacSystemFont, sans-serif";
-      for (let i = visStart; i <= visEnd; i++) {
-        if (i % labelEvery === 0 || i === allCandles.length - 1) {
-          const cx = leftPad + (i - leftEdgeBar + 0.5) * slotW;
-          if (cx < leftPad + 12 || cx > W - 22) continue;
-          const d = new Date(allCandles[i].time * 1000);
-          const hh = String(d.getHours()).padStart(2, "0");
-          const mm = String(d.getMinutes()).padStart(2, "0");
-          ctx.fillText(`${hh}:${mm}`, cx - 14, H - 4);
+        // Bottom IST timestamps under candles
+        const labelEvery = Math.max(5, Math.round(bars / 5));
+        ctx.fillStyle = isLight ? "#64748b" : "#6b7280";
+        ctx.font = "10px -apple-system, BlinkMacSystemFont, sans-serif";
+        for (let i = visStart; i <= visEnd; i++) {
+          if (i % labelEvery === 0) {
+            const cx = candleLeft + (i - leftEdgeBar + 0.5) * slotW;
+            if (cx < candleLeft + 14 || cx > candleRight - 24) continue;
+            const d = new Date(allCandles[i].time * 1000);
+            const hh = String(d.getHours()).padStart(2, "0");
+            const mm = String(d.getMinutes()).padStart(2, "0");
+            ctx.fillText(`${hh}:${mm}`, cx - 13, H - 5);
+          }
         }
       }
 
-      // Dashed mid-price line
-      const midY = yOf(state.mid_price);
-      if (midY >= 0 && midY <= plotH) {
+      // Dashed LTP line across candles + crisp slate-blue [ 25,410.00 ] badge at forming candle!
+      const ltpY = yOf(ltp);
+      if (ltpY >= 8 && ltpY <= plotH - 8) {
+        const tagW = 64;
+        const tagH = 18;
+        const tagX = Math.max(candleLeft + 20, Math.min(candleRight - tagW - 2, lastCandleX - tagW * 0.55));
+
         ctx.save();
-        ctx.setLineDash([4, 4]);
-        ctx.strokeStyle = MID_LINE_COLOR;
-        ctx.lineWidth = 1.2;
+        ctx.setLineDash([3, 4]);
+        ctx.strokeStyle = isLight ? "rgba(71, 85, 105, 0.45)" : "rgba(148, 163, 184, 0.38)";
+        ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(0, midY);
-        ctx.lineTo(W, midY);
+        ctx.moveTo(candleLeft, ltpY);
+        ctx.lineTo(tagX, ltpY);
         ctx.stroke();
         ctx.restore();
+
+        ctx.fillStyle = isLight ? "#dbeafe" : "#6c879e";
+        ctx.fillRect(tagX, ltpY + 4, tagW, tagH);
+        ctx.fillStyle = isLight ? "#0f172a" : "#081018";
+        ctx.font = "bold 10.5px ui-monospace, SFMono-Regular, Menlo, monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(fmtPrice(ltp), tagX + tagW / 2, ltpY + 16.5);
+        ctx.textAlign = "left";
       }
 
-      // Crosshair + hovered candle OHLC
-      let hoveredCandle = null;
-      if (view.hoverX > leftPad && view.hoverX < W - rightPad && view.hoverY >= 0 && view.hoverY <= plotH) {
-        const idx = Math.floor((view.hoverX - leftPad) / slotW + leftEdgeBar);
-        if (idx >= 0 && idx < allCandles.length) hoveredCandle = allCandles[idx];
+      // ----------------------------------------------------------------------
+      // ZONES 2–5: SEAMLESS FLOATING ORDER BOOK + PULLED GHOSTS + CALLOUTS
+      // ----------------------------------------------------------------------
+      const rawRows = (state.book && state.book.rows) || [];
+      const rowMap = new Map();
+      for (const r of rawRows) {
+        rowMap.set(Number(r.price).toFixed(2), r);
+      }
 
-        ctx.save();
-        ctx.setLineDash([3, 3]);
-        ctx.strokeStyle = "rgba(148, 163, 184, 0.45)";
-        ctx.lineWidth = 0.9;
+      // If zoomed way out vertically, step rows cleanly so labels never overlap
+      const rawRowStepPx = (bs / span) * plotH;
+      const stride = rawRowStepPx < 12 ? Math.ceil(12 / rawRowStepPx) : 1;
+      const dispStep = bs * stride;
+
+      const topBand = Math.floor(highP / dispStep) * dispStep;
+      const botBand = Math.ceil(lowP / dispStep) * dispStep;
+      const activeBand = Math.round(ltp / dispStep) * dispStep;
+
+      const visBands = [];
+      let maxCombinedLots = 80;
+      for (let p = topBand; p >= botBand - 1e-6; p = Math.round((p - dispStep) * 100) / 100) {
+        let buyL = 0, sellL = 0, pullB = 0, pullS = 0, boughtL = 0, soldL = 0, bigB = false, bigS = false;
+        for (let sub = 0; sub < stride; sub++) {
+          const sp = (p - sub * bs).toFixed(2);
+          const hit = rowMap.get(sp);
+          if (hit) {
+            buyL += hit.buy_lots || 0;
+            sellL += hit.sell_lots || 0;
+            pullB += hit.pulled_buy || 0;
+            pullS += hit.pulled_sell || 0;
+            boughtL += hit.bought_lots || 0;
+            soldL += hit.sold_lots || 0;
+            if (hit.big_buyer) bigB = true;
+            if (hit.big_seller) bigS = true;
+          }
+        }
+        maxCombinedLots = Math.max(maxCombinedLots, buyL + pullB, sellL + pullS);
+        visBands.push({
+          price: p,
+          buy_lots: Math.round(buyL),
+          sell_lots: Math.round(sellL),
+          pulled_buy: Math.round(pullB),
+          pulled_sell: Math.round(pullS),
+          pulled_total: Math.round(pullB + pullS),
+          bought_lots: Math.round(boughtL),
+          sold_lots: Math.round(soldL),
+          big_buyer: bigB,
+          big_seller: bigS,
+        });
+      }
+
+      // Mild power curve (0.72) so a 1,154-lot wall hits full width while 40–130 lot rows stay clearly visible!
+      const widthOfLots = (lots) => {
+        if (lots <= 0) return 0;
+        return Math.min(maxBarW, Math.max(2, Math.pow(lots / maxCombinedLots, 0.72) * maxBarW));
+      };
+
+      const rowStepPx = (dispStep / span) * plotH;
+      const barH = Math.max(6, Math.min(14, rowStepPx * 0.64));
+
+      for (const r of visBands) {
+        const y = yOf(r.price);
+        if (y < 8 || y > plotH - 8) continue;
+
+        const isActive = Math.abs(r.price - activeBand) < 1e-4;
+        const pStr = Number.isInteger(r.price) ? r.price.toLocaleString("en-IN") : r.price.toFixed(1);
+
+        // 1. Center Price Spine + Active Row White Pointer `◀`
+        ctx.textAlign = "center";
+        if (isActive) {
+          ctx.fillStyle = isLight ? "#0f172a" : "#ffffff";
+          ctx.font = "bold 11.5px ui-monospace, SFMono-Regular, Menlo, monospace";
+          ctx.fillText(pStr, priceX - 2, y + 4);
+          ctx.beginPath();
+          ctx.moveTo(priceX + 22, y);
+          ctx.lineTo(priceX + 28, y - 4.2);
+          ctx.lineTo(priceX + 28, y + 4.2);
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          ctx.fillStyle = isLight ? "#475569" : "#9ca3af";
+          ctx.font = "11px ui-monospace, SFMono-Regular, Menlo, monospace";
+          ctx.fillText(pStr, priceX - 2, y + 3.5);
+        }
+
+        // Subtle vertical baseline ticks `|` only on sides that have waiting/pulled orders (exact GIF look!)
+        ctx.strokeStyle = isLight ? "rgba(100,116,139,0.4)" : "rgba(148,163,184,0.34)";
+        ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(view.hoverX, 0);
-        ctx.lineTo(view.hoverX, plotH);
-        ctx.moveTo(leftPad, view.hoverY);
-        ctx.lineTo(W, view.hoverY);
+        if (r.buy_lots > 0 || r.pulled_buy > 0) {
+          ctx.moveTo(buyAnchorX, y - barH * 0.52);
+          ctx.lineTo(buyAnchorX, y + barH * 0.52);
+        }
+        if (r.sell_lots > 0 || r.pulled_sell > 0) {
+          ctx.moveTo(sellAnchorX, y - barH * 0.52);
+          ctx.lineTo(sellAnchorX, y + barH * 0.52);
+        }
+        ctx.stroke();
+
+        // 2. BUY SIDE (Left of Price Spine): Pulled Amber Ghost Bar + Solid Green Waiting Bar + Count + Amber Dot
+        const wBuy = widthOfLots(r.buy_lots);
+        const wBuyWithPull = widthOfLots(r.buy_lots + r.pulled_buy);
+
+        if (r.pulled_buy > 0 && wBuyWithPull > wBuy) {
+          ctx.fillStyle = "rgba(210, 144, 48, 0.44)";
+          ctx.fillRect(buyAnchorX - wBuyWithPull, y - barH / 2, wBuyWithPull - wBuy, barH);
+          ctx.fillStyle = "#eab308";
+          ctx.fillRect(buyAnchorX - wBuyWithPull, y - barH / 2, 1.8, barH);
+        }
+        if (r.buy_lots > 0) {
+          ctx.fillStyle = r.big_buyer ? "#5ed37d" : "#4ca965";
+          ctx.fillRect(buyAnchorX - wBuy, y - barH / 2, wBuy, barH);
+        }
+        if (r.buy_lots > 0) {
+          const leftBarEdge = buyAnchorX - Math.max(wBuy, r.pulled_buy > 0 ? wBuyWithPull : 0);
+          ctx.textAlign = "right";
+          ctx.fillStyle = r.big_buyer ? (isLight ? "#0f172a" : "#f8fafc") : (isLight ? "#475569" : "#cbd5e1");
+          ctx.font = r.big_buyer
+            ? "bold 11px ui-monospace, SFMono-Regular, Menlo, monospace"
+            : "10.5px ui-monospace, SFMono-Regular, Menlo, monospace";
+          ctx.fillText(fmtInt(r.buy_lots), leftBarEdge - 5, y + 3.5);
+        }
+        if (r.pulled_buy >= 10) {
+          const rad = Math.min(5.8, 2.0 + Math.sqrt(r.pulled_buy) * 0.22);
+          ctx.beginPath();
+          ctx.arc(buyDotX, y, rad, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(217, 155, 56, 0.65)";
+          ctx.fill();
+        }
+
+        // 3. SELL SIDE (Right of Price Spine): Pulled Amber Ghost Bar + Coral Waiting Bar + Count + Amber Dot
+        const wSell = widthOfLots(r.sell_lots);
+        const wSellWithPull = widthOfLots(r.sell_lots + r.pulled_sell);
+
+        if (r.pulled_sell > 0 && wSellWithPull > wSell) {
+          ctx.fillStyle = "rgba(210, 144, 48, 0.44)";
+          ctx.fillRect(sellAnchorX + wSell, y - barH / 2, wSellWithPull - wSell, barH);
+          ctx.fillStyle = "#eab308";
+          ctx.fillRect(sellAnchorX + wSellWithPull - 1.8, y - barH / 2, 1.8, barH);
+        }
+        if (r.sell_lots > 0) {
+          ctx.fillStyle = r.big_seller ? "#e57358" : "#c2704a";
+          ctx.fillRect(sellAnchorX, y - barH / 2, wSell, barH);
+        }
+        if (r.sell_lots > 0) {
+          const rightBarEdge = sellAnchorX + Math.max(wSell, r.pulled_sell > 0 ? wSellWithPull : 0);
+          ctx.textAlign = "left";
+          ctx.fillStyle = r.big_seller ? (isLight ? "#0f172a" : "#f8fafc") : (isLight ? "#475569" : "#cbd5e1");
+          ctx.font = r.big_seller
+            ? "bold 11px ui-monospace, SFMono-Regular, Menlo, monospace"
+            : "10.5px ui-monospace, SFMono-Regular, Menlo, monospace";
+          ctx.fillText(fmtInt(r.sell_lots), rightBarEdge + 5, y + 3.5);
+        }
+        if (r.pulled_sell >= 10) {
+          const rad = Math.min(5.8, 2.0 + Math.sqrt(r.pulled_sell) * 0.22);
+          ctx.beginPath();
+          ctx.arc(sellDotX, y, rad, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(217, 155, 56, 0.65)";
+          ctx.fill();
+        }
+
+        // 4. FAR RIGHT LIVE ORDER-FLOW CALLOUTS ("Big Sellers", "Big Buyers", "12 sold", "14 bought", "536 pulled")
+        ctx.textAlign = "left";
+        let tx = calloutX;
+        if (r.big_seller && tx < W - 55) {
+          ctx.font = "bold 10.5px -apple-system, BlinkMacSystemFont, sans-serif";
+          ctx.fillStyle = "#eb7a61";
+          ctx.fillText("Big Sellers", tx, y + 3.5);
+          tx += ctx.measureText("Big Sellers").width + 7;
+        } else if (r.big_buyer && tx < W - 55) {
+          ctx.font = "bold 10.5px -apple-system, BlinkMacSystemFont, sans-serif";
+          ctx.fillStyle = "#58c977";
+          ctx.fillText("Big Buyers", tx, y + 3.5);
+          tx += ctx.measureText("Big Buyers").width + 7;
+        }
+
+        if (r.sold_lots >= 5 && r.sold_lots >= r.bought_lots && tx < W - 45) {
+          const sTxt = `${fmtInt(r.sold_lots)} sold`;
+          ctx.font = "600 10.5px -apple-system, BlinkMacSystemFont, sans-serif";
+          ctx.fillStyle = "#df7057";
+          ctx.fillText(sTxt, tx, y + 3.5);
+          tx += ctx.measureText(sTxt).width + 7;
+        } else if (r.bought_lots >= 5 && tx < W - 45) {
+          const bTxt = `${fmtInt(r.bought_lots)} bought`;
+          ctx.font = "600 10.5px -apple-system, BlinkMacSystemFont, sans-serif";
+          ctx.fillStyle = "#58c977";
+          ctx.fillText(bTxt, tx, y + 3.5);
+          tx += ctx.measureText(bTxt).width + 7;
+        }
+
+        if (r.pulled_total >= 8 && tx < W - 45) {
+          const pTxt = `${fmtInt(r.pulled_total)} pulled`;
+          ctx.font = "bold 10.5px -apple-system, BlinkMacSystemFont, sans-serif";
+          ctx.fillStyle = "#e0a33c";
+          ctx.fillText(pTxt, tx, y + 3.5);
+        }
+      }
+
+      ctx.textAlign = "left";
+
+      // Crosshair & OHLC readout when hovering over Candles / Order Book
+      let hoveredCandle = null;
+      if (view.hoverX >= candleLeft && view.hoverX <= W - 8 && view.hoverY >= 0 && view.hoverY <= plotH) {
+        if (view.hoverX <= candleRight && allCandles.length) {
+          const idx = Math.floor((view.hoverX - candleLeft) / slotW + leftEdgeBar);
+          if (idx >= 0 && idx < allCandles.length) hoveredCandle = allCandles[idx];
+        }
+        ctx.save();
+        ctx.setLineDash([2, 3]);
+        ctx.strokeStyle = "rgba(148, 163, 184, 0.28)";
+        ctx.lineWidth = 0.85;
+        ctx.beginPath();
+        ctx.moveTo(candleLeft, view.hoverY);
+        ctx.lineTo(W - 8, view.hoverY);
+        if (view.hoverX <= candleRight) {
+          ctx.moveTo(view.hoverX, 0);
+          ctx.lineTo(view.hoverX, plotH);
+        }
         ctx.stroke();
         ctx.restore();
-
-        const pAtMouse = highP - (view.hoverY / plotH) * span;
-        ctx.fillStyle = panelAlt;
-        ctx.fillRect(1, Math.max(0, view.hoverY - 8), leftPad - 3, 16);
-        ctx.fillStyle = "#e2e8f0";
-        ctx.font = "bold 9.5px -apple-system, BlinkMacSystemFont, sans-serif";
-        ctx.fillText(Math.round(pAtMouse).toLocaleString("en-IN"), 4, Math.max(11, view.hoverY + 3));
       }
 
       const shown = hoveredCandle || allCandles[allCandles.length - 1];
@@ -1678,21 +1928,23 @@
         const dt = new Date(shown.time * 1000);
         const tStr = `${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
         document.getElementById("ohlcHover").textContent =
-          `${tStr}  O:${shown.open.toFixed(1)}  H:${shown.high.toFixed(1)}  L:${shown.low.toFixed(1)}  C:${shown.close.toFixed(1)}`;
+          `${tStr}  O:${shown.open.toFixed(1)} H:${shown.high.toFixed(1)} L:${shown.low.toFixed(1)} C:${shown.close.toFixed(1)}`;
       }
 
       canvas._geom = {
         key: "ob",
-        plotLeft: leftPad,
-        plotRight: W - rightPad,
+        plotLeft: candleLeft,
+        plotRight: candleRight,
         plotTop: 0,
         plotBottom: plotH,
-        plotW,
+        plotW: candlePlotW,
         plotH,
         slotW,
         span,
-        priceAxisSide: "left",
-        timeAxisTop: H - 22,
+        priceAxisSide: "spine",
+        spineLeft: priceX - 28,
+        spineRight: priceX + 32,
+        timeAxisTop: plotH,
       };
     }
 
@@ -2171,6 +2423,7 @@
         if (!g) return "plot";
         if (g.priceAxisSide === "right" && x >= g.plotRight) return "price";
         if (g.priceAxisSide === "left" && x <= g.plotLeft) return "price";
+        if (g.priceAxisSide === "spine" && x >= g.spineLeft && x <= g.spineRight && y < g.timeAxisTop) return "price";
         if (y >= g.timeAxisTop) return "time";
         return "plot";
       };
@@ -2314,8 +2567,8 @@
           view.panBars += (oldBars - newBars) * fracRight;
           view.visibleBars = newBars;
 
-          if (key === "bo" || !syncPriceScale) {
-            view.yZoom = Math.max(0.2, Math.min(8.0, view.yZoom * yFactor));
+          if (key === "bo" || key === "ob") {
+            view.yZoom = Math.max(0.25, Math.min(6.0, view.yZoom * yFactor));
           }
         }
         view.hoverX = x;

@@ -393,6 +393,18 @@ class MarketScreenEngine:
             "sell_near_lots": 0,
         }
 
+        # Per-band live Order-Flow tracker (waiting, bought, sold, pulled/cancelled)
+        self._prev_band_buy: dict[float, float] = {}
+        self._prev_band_sell: dict[float, float] = {}
+        self._prev_depth_bounds: tuple[float, float] = (0.0, 0.0)
+        self._pulled_buy: dict[float, float] = {}
+        self._pulled_sell: dict[float, float] = {}
+        self._bought_lots: dict[float, float] = {}
+        self._sold_lots: dict[float, float] = {}
+        self._last_flow_ts: float = 0.0
+        self._last_flow_bs: float = float(self.band_size)
+        self._last_vtt: float = 0.0
+
         self.connection_status = "starting"
         self.status_message = "Initializing market screen..."
         self.token_expired = False
@@ -432,6 +444,100 @@ class MarketScreenEngine:
             })
             if len(self.candles) > MAX_CANDLES:
                 self.candles = self.candles[-MAX_CANDLES:]
+
+    def _update_order_flow_locked(
+        self,
+        trade_price: float = 0.0,
+        trade_lots: float = 0.0,
+        trade_side: str = "",
+    ):
+        """
+        Track per-band:
+          - pulled (cancelled) buy & sell lots (depth decrease minus traded executions, ~18s decay)
+          - aggressive bought (lifting ask) & sold (hitting bid) lots (~20s decay)
+        """
+        now = time.time()
+        bs = max(0.5, float(self.band_size or 5.0))
+        lot_sz = max(1, int(self.lot_size or 1))
+
+        if abs(bs - self._last_flow_bs) > 1e-6:
+            self._prev_band_buy.clear()
+            self._prev_band_sell.clear()
+            self._pulled_buy.clear()
+            self._pulled_sell.clear()
+            self._bought_lots.clear()
+            self._sold_lots.clear()
+            self._last_flow_bs = bs
+
+        dt = min(5.0, max(0.05, now - self._last_flow_ts)) if self._last_flow_ts > 0 else 1.0
+        self._last_flow_ts = now
+        decay_pull = math.exp(-dt / 18.0)
+        decay_trade = math.exp(-dt / 20.0)
+
+        for dct, dec in (
+            (self._pulled_buy, decay_pull),
+            (self._pulled_sell, decay_pull),
+            (self._bought_lots, decay_trade),
+            (self._sold_lots, decay_trade),
+        ):
+            for k in list(dct.keys()):
+                nv = dct[k] * dec
+                if nv < 0.45:
+                    dct.pop(k, None)
+                else:
+                    dct[k] = nv
+
+        def snap_bid(p: float) -> float:
+            return round(math.floor(round(p / bs, 6)) * bs, 2)
+
+        def snap_ask(p: float) -> float:
+            return round(math.ceil(round(p / bs, 6)) * bs, 2)
+
+        curr_buy: dict[float, float] = {}
+        curr_sell: dict[float, float] = {}
+        for price, qty in self.bids:
+            if price > 0 and qty > 0:
+                b = snap_bid(price)
+                curr_buy[b] = curr_buy.get(b, 0.0) + (qty / lot_sz)
+        for price, qty in self.asks:
+            if price > 0 and qty > 0:
+                b = snap_ask(price)
+                curr_sell[b] = curr_sell.get(b, 0.0) + (qty / lot_sz)
+
+        tp_band = 0.0
+        if trade_price > 0 and trade_lots > 0:
+            if trade_side == "BUY":
+                tp_band = snap_ask(trade_price)
+                self._bought_lots[tp_band] = self._bought_lots.get(tp_band, 0.0) + trade_lots
+            else:
+                tp_band = snap_bid(trade_price)
+                self._sold_lots[tp_band] = self._sold_lots.get(tp_band, 0.0) + trade_lots
+
+        curr_min_bid = min(curr_buy.keys()) if curr_buy else 0.0
+        curr_max_ask = max(curr_sell.keys()) if curr_sell else 0.0
+
+        if self._prev_band_buy and curr_min_bid > 0:
+            for p, prev_l in self._prev_band_buy.items():
+                # Only count cancellations inside currently visible depth window
+                if p >= curr_min_bid:
+                    drop = prev_l - curr_buy.get(p, 0.0)
+                    exec_here = trade_lots if (trade_side == "SELL" and abs(tp_band - p) < 1e-4) else 0.0
+                    pulled = drop - exec_here
+                    if pulled >= 1.5:
+                        self._pulled_buy[p] = self._pulled_buy.get(p, 0.0) + pulled
+
+        if self._prev_band_sell and curr_max_ask > 0:
+            for p, prev_l in self._prev_band_sell.items():
+                if p <= curr_max_ask:
+                    drop = prev_l - curr_sell.get(p, 0.0)
+                    exec_here = trade_lots if (trade_side == "BUY" and abs(tp_band - p) < 1e-4) else 0.0
+                    pulled = drop - exec_here
+                    if pulled >= 1.5:
+                        self._pulled_sell[p] = self._pulled_sell.get(p, 0.0) + pulled
+
+        self._prev_band_buy = curr_buy
+        self._prev_band_sell = curr_sell
+        self._prev_depth_bounds = (curr_min_bid, curr_max_ask)
 
     # --------------------------------------------------------------------------
     # BIG ORDERS ENGINE ("Big orders right now" tab — resting walls & context)
@@ -662,14 +768,26 @@ class MarketScreenEngine:
         now = time.time()
         # Seed realistic multi-minute resting walls so Demo Mode looks authentic immediately
         self._demo_walls_buy = {
-            c - 2 * w: random.randint(180, 290),
-            c - 4 * w: random.randint(140, 240),
+            c - 1 * w: random.randint(680, 1120),  # Prominent active Big Buyer wall right at best bid band!
+            c - 3 * w: random.randint(65, 115),
+            c - 5 * w: random.randint(45, 85),
         }
         self._demo_walls_sell = {
-            c + 1 * w: random.randint(170, 260),
-            c + 2 * w: random.randint(85, 130),
-            c + 4 * w: random.randint(150, 240),
+            c + 1 * w: random.randint(85, 135),
+            c + 2 * w: random.randint(95, 145),
+            c + 4 * w: random.randint(65, 110),
+            c + 7 * w: random.randint(115, 165),
+            c + 8 * w: random.randint(75, 125),
         }
+        # Pre-seed realistic pulled/bought/sold order-flow activity on startup
+        if not self._pulled_sell and not self._pulled_buy:
+            self._pulled_sell[float(c + 1 * w)] = float(random.randint(240, 520))
+            self._pulled_sell[float(c + 2 * w)] = float(random.randint(95, 210))
+            self._pulled_buy[float(c - 2 * w)] = float(random.randint(140, 290))
+            self._pulled_buy[float(c - 3 * w)] = float(random.randint(90, 220))
+            self._pulled_buy[float(c - 4 * w)] = float(random.randint(60, 180))
+            self._sold_lots[float(c)] = float(random.randint(10, 28))
+            self._bought_lots[float(c + 1 * w)] = float(random.randint(12, 34))
         # Pre-seed realistic resting ages on initial startup
         if not self._resting_walls:
             for bp, bl in self._demo_walls_buy.items():
@@ -722,28 +840,28 @@ class MarketScreenEngine:
 
         bids = []
         asks = []
-        level_step = max(1.0, w / 4.0)
+        level_step = max(1.0, w / 2.0)
         used_buy_walls = set()
         used_sell_walls = set()
         for idx in range(DEMO_LEVELS):
             bp = round(self.best_bid - idx * level_step, 2)
             ap = round(self.best_ask + idx * level_step, 2)
 
-            b_band = int(math.floor((bp - 1e-6) / w) * w)
-            s_band = int(math.floor(ap / w) * w)
+            b_band = int(math.floor(round(bp / w, 6)) * w)
+            s_band = int(math.ceil(round(ap / w, 6)) * w)
 
             b_extra = 0
             if b_band in self._demo_walls_buy and b_band not in used_buy_walls:
                 used_buy_walls.add(b_band)
-                b_extra = int(self._demo_walls_buy[b_band] * random.uniform(0.92, 1.08))
+                b_extra = int(self._demo_walls_buy[b_band] * random.uniform(0.985, 1.015))
 
             s_extra = 0
             if s_band in self._demo_walls_sell and s_band not in used_sell_walls:
                 used_sell_walls.add(s_band)
-                s_extra = int(self._demo_walls_sell[s_band] * random.uniform(0.92, 1.08))
+                s_extra = int(self._demo_walls_sell[s_band] * random.uniform(0.985, 1.015))
 
-            b_lots = max(3, random.randint(6, 20) + b_extra)
-            s_lots = max(3, random.randint(6, 20) + s_extra)
+            b_lots = max(3, random.randint(7, 11) + b_extra)
+            s_lots = max(3, random.randint(7, 11) + s_extra)
 
             bids.append((bp, b_lots * lot_sz))
             asks.append((ap, s_lots * lot_sz))
@@ -757,6 +875,34 @@ class MarketScreenEngine:
 
         true_mid = round((self.best_bid + self.best_ask) / 2.0, 2)
         self.mid_price = true_mid
+
+        # Simulate realistic aggressive trade + occasional spoof/pull in Demo Mode (without auto-diff noise)
+        now_d = time.time()
+        dt_d = min(3.0, max(0.2, now_d - self._last_flow_ts)) if self._last_flow_ts > 0 else 1.0
+        self._last_flow_ts = now_d
+        dec_d = math.exp(-dt_d / 18.0)
+        for dct in (self._pulled_buy, self._pulled_sell, self._bought_lots, self._sold_lots):
+            for k in list(dct.keys()):
+                if dct[k] * dec_d < 0.5:
+                    dct.pop(k, None)
+                else:
+                    dct[k] *= dec_d
+
+        bs = max(0.5, float(self.band_size or 5.0))
+        c_band = round(true_mid / bs) * bs
+        if random.random() < 0.45:
+            if random.random() < 0.52:
+                self._bought_lots[round(c_band + bs, 2)] = min(90.0, self._bought_lots.get(round(c_band + bs, 2), 0.0) + random.randint(4, 14))
+            else:
+                self._sold_lots[round(c_band, 2)] = min(90.0, self._sold_lots.get(round(c_band, 2), 0.0) + random.randint(4, 14))
+        if random.random() < 0.22:
+            if random.random() < 0.5:
+                pb = round(c_band - random.choice([2, 3, 4]) * bs, 2)
+                self._pulled_buy[pb] = min(380.0, self._pulled_buy.get(pb, 20.0) + random.randint(25, 95))
+            else:
+                ps = round(c_band + random.choice([1, 2]) * bs, 2)
+                self._pulled_sell[ps] = min(560.0, self._pulled_sell.get(ps, 30.0) + random.randint(35, 130))
+
         self._update_candle_locked(true_mid)
         self._update_big_orders_locked()
 
@@ -1279,7 +1425,9 @@ class MarketScreenEngine:
                 ltpc = mff.get("ltpc") or feed.get("ltpc") or {}
 
                 ltp = float(ltpc.get("ltp") or 0.0)
+                ltq = float(ltpc.get("ltq") or 0.0)
                 cp = float(ltpc.get("cp") or 0.0)
+                vtt = float(mff.get("vtt") or 0.0)
                 quotes = (mff.get("marketLevel") or {}).get("bidAskQuote") or []
 
                 bids = []
@@ -1297,6 +1445,18 @@ class MarketScreenEngine:
                 with self.lock:
                     if self.session_id != sid:
                         return
+                    prev_mid = self.mid_price or ltp
+                    prev_ask = self.best_ask or prev_mid
+                    prev_bid = self.best_bid or prev_mid
+
+                    trade_qty = 0.0
+                    if vtt > 0:
+                        if self._last_vtt > 0 and vtt > self._last_vtt:
+                            trade_qty = vtt - self._last_vtt
+                        self._last_vtt = vtt
+                    elif ltq > 0:
+                        trade_qty = ltq
+
                     if ltp > 0:
                         self.ltp = round(ltp, 2)
                     if cp > 0:
@@ -1315,6 +1475,10 @@ class MarketScreenEngine:
                         mid = round((self.best_bid + self.best_ask) / 2.0, 2)
                     else:
                         mid = self.ltp
+
+                    trade_lots = trade_qty / max(1, self.lot_size) if trade_qty > 0 else 0.0
+                    trade_side = "BUY" if (ltp >= prev_ask or ltp >= prev_mid) else "SELL"
+                    self._update_order_flow_locked(ltp, trade_lots, trade_side)
 
                     if mid > 0:
                         self.mid_price = mid
@@ -1420,6 +1584,50 @@ class MarketScreenEngine:
                 highlight_top_n=HIGHLIGHT_TOP_N,
                 mid_price=self.mid_price,
             )
+            # Enrich ladder rows (plus any active pulled/traded levels) with order-flow metrics
+            row_map = {round(float(r["price"]), 2): r for r in ladder["rows"]}
+            bs_now = max(0.5, float(self.band_size or 5.0))
+            mid_snap = round((self.mid_price or 25000.0) / bs_now) * bs_now
+            for i in range(-18, 19):
+                p_k = round(mid_snap + i * bs_now, 2)
+                if p_k not in row_map:
+                    row_map[p_k] = {
+                        "price": p_k,
+                        "buy_lots": 0.0,
+                        "sell_lots": 0.0,
+                        "buy_rank": 0,
+                        "sell_rank": 0,
+                        "buy_highlight": False,
+                        "sell_highlight": False,
+                    }
+
+            non_zero = [
+                v for r in row_map.values()
+                for v in (r["buy_lots"], r["sell_lots"])
+                if v > 0
+            ]
+            usual_row = statistics.median(non_zero) if len(non_zero) >= 4 else 35.0
+            big_thresh = max(usual_row * 1.9, 55.0)
+
+            enriched_rows = []
+            for p_k in sorted(row_map.keys(), reverse=True):
+                r = dict(row_map[p_k])
+                pb = int(round(self._pulled_buy.get(p_k, 0.0)))
+                ps = int(round(self._pulled_sell.get(p_k, 0.0)))
+                bt = int(round(self._bought_lots.get(p_k, 0.0)))
+                sd = int(round(self._sold_lots.get(p_k, 0.0)))
+                r["pulled_buy"] = pb
+                r["pulled_sell"] = ps
+                r["pulled_total"] = pb + ps
+                r["bought_lots"] = bt
+                r["sold_lots"] = sd
+                r["big_buyer"] = bool(r["buy_lots"] >= big_thresh)
+                r["big_seller"] = bool(r["sell_lots"] >= big_thresh)
+                enriched_rows.append(r)
+
+            ladder["rows"] = enriched_rows
+            ladder["usual_row_lots"] = round(usual_row, 1)
+
             chg = round(self.ltp - self.prev_close, 2) if self.prev_close else 0.0
             chg_pct = round((chg / self.prev_close) * 100.0, 2) if self.prev_close else 0.0
             spread = round(self.best_ask - self.best_bid, 2) if (self.best_ask > 0 and self.best_bid > 0) else 0.0
@@ -1430,6 +1638,7 @@ class MarketScreenEngine:
 
             return {
                 "server_time_ist": now_ist().strftime("%H:%M:%S IST"),
+                "candle_sec_into_min": int(time.time()) % 60,
                 "market_open": is_market_open_ist(),
                 "source": self.source,
                 "symbol": self.symbol,
