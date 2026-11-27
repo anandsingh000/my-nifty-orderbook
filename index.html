@@ -2,7 +2,11 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#030406" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>NIFTY Order Book &amp; Option OI Screen</title>
   <style>
     /* ========================================================================
@@ -928,15 +932,165 @@
       height: 64px;
     }
 
-    @media (max-width: 1080px) {
-      body { overflow: auto; height: auto; }
-      .workspace, .orderflow-workspace, .big-workspace {
-        grid-template-columns: 1fr !important;
-        gap: 8px;
-        height: auto;
+    /* Android Mobile Bottom Tab Bar (Hidden on Desktop, 1 Tab per Box on Mobile) */
+    .mobile-box-nav, .mob-apk-link {
+      display: none;
+    }
+
+    @media (max-width: 960px) {
+      .mob-apk-link {
+        display: inline-flex;
+        align-items: center;
+        text-decoration: none;
+        background: rgba(34, 197, 94, 0.16);
+        border: 1px solid rgba(34, 197, 94, 0.45);
+        color: #4ade80;
+        border-radius: 5px;
+        font-size: 10.5px;
+        font-weight: 700;
+        padding: 3px 8px;
+        white-space: nowrap;
       }
-      .col-resizer { display: none; }
-      .panel, .bo-card-shell { height: 540px; }
+      html, body {
+        height: 100dvh;
+        max-height: 100dvh;
+        overflow: hidden;
+      }
+      .topbar {
+        flex-wrap: wrap;
+        padding: 6px 8px;
+        gap: 5px;
+      }
+      .brand-group {
+        width: 100%;
+        justify-content: space-between;
+        gap: 6px;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .brand-group::-webkit-scrollbar { display: none; }
+      .contract-name { font-size: 11.5px; }
+      .price-big { font-size: 14.5px; }
+      .chg-pill { font-size: 10px; padding: 1px 5px; }
+      .meta-pills {
+        gap: 4px;
+        flex-shrink: 0;
+      }
+      .pill { font-size: 9.5px; padding: 1px 5px; }
+      #clockPill { display: none; }
+      .controls {
+        width: 100%;
+        overflow-x: auto;
+        scrollbar-width: none;
+        padding-bottom: 1px;
+        gap: 5px;
+      }
+      .controls::-webkit-scrollbar { display: none; }
+      .controls > * { flex-shrink: 0; }
+      /* Desktop 2-tab switcher hidden on mobile because Bottom Bar gives 1 tab per box */
+      .controls .tab-group { display: none; }
+      .seg-btn, .action-btn {
+        font-size: 10.5px;
+        padding: 3px 8px;
+        white-space: nowrap;
+      }
+
+      .workspace, .orderflow-workspace, .big-workspace {
+        flex: 1;
+        min-height: 0;
+        height: auto;
+        display: flex;
+        flex-direction: column;
+        padding: 4px 4px 2px 4px;
+        gap: 0;
+      }
+      .workspace.hidden-tab {
+        display: none !important;
+      }
+      .col-resizer {
+        display: none !important;
+      }
+      .workspace > .panel,
+      .workspace > .bo-card-shell {
+        display: none !important;
+        width: 100% !important;
+        height: 100% !important;
+        flex: 1;
+        min-height: 0;
+      }
+      .workspace > .mobile-active-box {
+        display: flex !important;
+      }
+      .flow-legend-bar {
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .flow-legend-bar::-webkit-scrollbar { display: none; }
+
+      .mobile-box-nav {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        background: #05080e;
+        border-top: 1px solid #1a2436;
+        padding: 3px 2px calc(3px + env(safe-area-inset-bottom, 0px)) 2px;
+        flex-shrink: 0;
+        z-index: 50;
+      }
+      html[data-theme="light"] .mobile-box-nav {
+        background: #f8fafc;
+        border-top-color: #cbd5e1;
+      }
+      .mob-tab-btn {
+        appearance: none;
+        border: none;
+        background: transparent;
+        color: #7c8da6;
+        padding: 5px 2px 4px 2px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        font-size: 9.5px;
+        font-weight: 600;
+        border-radius: 7px;
+        cursor: pointer;
+        position: relative;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .mob-tab-btn svg {
+        width: 16px;
+        height: 16px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.9;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .mob-tab-btn.active {
+        color: #4ade80;
+        background: rgba(34, 197, 94, 0.11);
+      }
+      html[data-theme="light"] .mob-tab-btn.active {
+        color: #059669;
+        background: rgba(16, 185, 129, 0.14);
+      }
+      .mob-badge {
+        position: absolute;
+        top: 2px;
+        right: 6px;
+        min-width: 13px;
+        height: 13px;
+        padding: 0 3px;
+        border-radius: 9px;
+        background: #ef4444;
+        color: #ffffff;
+        font-size: 8.5px;
+        font-weight: 700;
+        line-height: 13px;
+        text-align: center;
+        display: none;
+      }
     }
   </style>
 </head>
@@ -959,7 +1113,7 @@
         <span class="pill">Mid <strong id="midDisplay">25,000.00</strong></span>
         <span class="pill">Sprd <strong id="spreadDisplay">0.50</strong></span>
         <span class="pill">Lot <strong id="lotDisplay">65</strong></span>
-        <span class="pill"><strong id="levelsDisplay">20 lvls</strong></span>
+        <span class="pill" style="cursor:pointer;" onclick="toggleDepthMode()" title="Click in Upstox mode to toggle 30-level (full_d30) / 5-level (full) depth"><strong id="levelsDisplay">20 lvls</strong></span>
         <span class="pill" id="clockPill">00:00:00</span>
       </div>
     </div>
@@ -1006,6 +1160,9 @@
       <button class="action-btn" id="btnTheme" onclick="toggleTheme()" title="Switch Light / Dark theme">
         Light
       </button>
+
+      <!-- Direct APK Download Link (Visible only in mobile browser, hidden on Desktop & inside installed APK) -->
+      <a class="mob-apk-link" id="mobApkLink" href="/NIFTY-OrderBook.apk" download="NIFTY-OrderBook.apk" target="_blank">⬇ APK</a>
     </div>
   </header>
 
@@ -1050,7 +1207,7 @@
     <div class="col-resizer" data-ws="tabOrderBook" data-idx="0" title="Drag left/right to resize boxes (Double-click to reset)"></div>
 
     <!-- BOX 2 (CENTER): SEPARATE GIF-STYLE LIVE ORDER BOOK (Waiting · Bought/Sold · Pulled) -->
-    <section class="panel flow-panel" id="bookPanel">
+    <section class="panel flow-panel mobile-active-box" id="bookPanel">
       <div class="panel-header flow-header">
         <span class="flow-title" id="flowTitle">Order book (lots waiting, per 5 points)</span>
         <div class="chart-tools">
@@ -1123,7 +1280,7 @@
   <main class="workspace big-workspace hidden-tab" id="tabBigOrders">
 
     <!-- 1. LEFT CARD: Exact "Big orders right now" Reference Design -->
-    <section class="bo-card-shell">
+    <section class="bo-card-shell" id="boListPanel">
       <div class="bo-head">
         <div class="bo-head-top">
           <span class="bo-title">Big orders right now</span>
@@ -1159,7 +1316,7 @@
     <div class="col-resizer" data-ws="tabBigOrders" data-idx="0" title="Drag left/right to resize boxes (Double-click to reset)"></div>
 
     <!-- 2. CENTER PANEL: 1-Minute Candles with Resting Wall Zones Overlaid -->
-    <section class="panel">
+    <section class="panel" id="boChartPanel">
       <div class="panel-header">
         <span>1-Minute Price &amp; Resting Wall Zones</span>
         <div class="chart-tools">
@@ -1185,7 +1342,7 @@
     <div class="col-resizer" data-ws="tabBigOrders" data-idx="1" title="Drag left/right to resize boxes (Double-click to reset)"></div>
 
     <!-- 3. RIGHT PANEL: Strike OI Alignment & Resting Wall Log -->
-    <section class="panel">
+    <section class="panel" id="boLogPanel">
       <div class="panel-header">
         <span>Strike OI Alignment &amp; Wall Activity</span>
         <span class="panel-sub">Futures wall vs Option OI</span>
@@ -1199,6 +1356,35 @@
     </section>
 
   </main>
+
+  <!-- ANDROID / MOBILE BOTTOM NAVIGATION BAR: 1 DEDICATED TAB PER BOX -->
+  <nav class="mobile-box-nav" id="mobileBoxNav">
+    <button class="mob-tab-btn active" data-mob="book" onclick="switchMobileBox('book')">
+      <svg viewBox="0 0 24 24"><path d="M4 6h7M4 12h10M4 18h5M15 6h5M17 12h3M13 18h7"/></svg>
+      <span>Order Book</span>
+    </button>
+    <button class="mob-tab-btn" data-mob="chart" onclick="switchMobileBox('chart')">
+      <svg viewBox="0 0 24 24"><path d="M6 4v16M6 8h3v6H6zM12 6v12M12 9h3v5h-3zM18 5v14M18 10h3v5h-3z"/></svg>
+      <span>Chart</span>
+    </button>
+    <button class="mob-tab-btn" data-mob="oi" onclick="switchMobileBox('oi')">
+      <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18M12 4v16"/></svg>
+      <span>Option OI</span>
+    </button>
+    <button class="mob-tab-btn" data-mob="big" onclick="switchMobileBox('big')">
+      <span class="mob-badge" id="mNavBigBadge">0</span>
+      <svg viewBox="0 0 24 24"><path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z"/></svg>
+      <span>Big Orders</span>
+    </button>
+    <button class="mob-tab-btn" data-mob="zones" onclick="switchMobileBox('zones')">
+      <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="4" rx="1"/><rect x="3" y="15" width="18" height="4" rx="1"/><path d="M4 12h16"/></svg>
+      <span>Wall Chart</span>
+    </button>
+    <button class="mob-tab-btn" data-mob="log" onclick="switchMobileBox('log')">
+      <svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M5 6h.01M5 12h.01M5 18h.01"/></svg>
+      <span>OI &amp; Log</span>
+    </button>
+  </nav>
 
   <script>
     // ========================================================================
@@ -1271,12 +1457,76 @@
       return Number.isInteger(v) ? v.toLocaleString("en-IN") : v.toLocaleString("en-IN", { maximumFractionDigits: 1 });
     };
 
+    // 60 FPS Live Order-Flow Physics & Impulse State (gliding bars, trade flashes, pulled ghost shimmers)
+    const bookAnim = {
+      rows: new Map(),
+      ltp: 0,
+      mid: 0,
+      scaleMax: 0,
+      symbol: "",
+      bandSize: 0,
+      lastFrameTs: performance.now(),
+      lastStreamTs: 0,
+      lastOiSig: "",
+      lastOiRenderTs: 0,
+    };
+
+    function ingestState(next) {
+      if (!next) return;
+      bookAnim.lastStreamTs = Date.now();
+      const bs = Number(next.band_size || 5);
+      if (next.symbol !== bookAnim.symbol || Math.abs(bs - bookAnim.bandSize) > 1e-4) {
+        bookAnim.rows.clear();
+        bookAnim.ltp = Number(next.ltp || next.mid_price || 0);
+        bookAnim.mid = Number(next.mid_price || next.ltp || 0);
+        bookAnim.scaleMax = 0;
+        bookAnim.symbol = next.symbol || "";
+        bookAnim.bandSize = bs;
+        bookAnim.lastOiSig = "";
+      }
+
+      const rawRows = (next.book && next.book.rows) || [];
+      for (const r of rawRows) {
+        const key = Number(r.price).toFixed(2);
+        const rec = bookAnim.rows.get(key);
+        const bL = Number(r.buy_lots || 0);
+        const sL = Number(r.sell_lots || 0);
+        const pB = Number(r.pulled_buy || 0);
+        const pS = Number(r.pulled_sell || 0);
+        const bt = Number(r.bought_lots || 0);
+        const sd = Number(r.sold_lots || 0);
+
+        if (!rec) {
+          bookAnim.rows.set(key, {
+            dispBuy: bL, dispSell: sL, dispPullB: pB, dispPullS: pS,
+            rawBuy: bL, rawSell: sL, rawPullB: pB, rawPullS: pS, rawBought: bt, rawSold: sd,
+            flashBought: 0, flashSold: 0, flashPullB: 0, flashPullS: 0, pulseBuy: 0, pulseSell: 0,
+          });
+        } else {
+          if (bt > rec.rawBought) rec.flashBought = 1.0;
+          if (sd > rec.rawSold) rec.flashSold = 1.0;
+          if (pB > rec.rawPullB + 0.8) rec.flashPullB = 1.0;
+          if (pS > rec.rawPullS + 0.8) rec.flashPullS = 1.0;
+          if (Math.abs(bL - rec.rawBuy) >= 1) rec.pulseBuy = Math.max(rec.pulseBuy, 0.75);
+          if (Math.abs(sL - rec.rawSell) >= 1) rec.pulseSell = Math.max(rec.pulseSell, 0.75);
+          rec.rawBuy = bL;
+          rec.rawSell = sL;
+          rec.rawPullB = pB;
+          rec.rawPullS = pS;
+          rec.rawBought = bt;
+          rec.rawSold = sd;
+        }
+      }
+
+      latestState = next;
+      renderAll(latestState);
+    }
+
     async function fetchState() {
       try {
         const res = await fetch("/api/state", { cache: "no-store" });
         if (!res.ok) return;
-        latestState = await res.json();
-        renderAll(latestState);
+        ingestState(await res.json());
       } catch (err) {
         document.getElementById("connDot").className = "status-dot dot-red";
         document.getElementById("connLabel").textContent = "Server Offline";
@@ -1287,6 +1537,7 @@
       try {
         if (payload.symbol || payload.source) {
           centeredOiOnce = false;
+          bookAnim.lastOiSig = "";
           if (payload.symbol) {
             resetChart("ob");
             resetChart("bo");
@@ -1298,11 +1549,49 @@
           body: JSON.stringify(payload),
         });
         if (res.ok) {
-          latestState = await res.json();
-          renderAll(latestState);
+          ingestState(await res.json());
         }
       } catch (e) {
         console.error(e);
+      }
+    }
+
+    const MOBILE_BOX_MAP = {
+      book:  { tab: "book", panelId: "bookPanel" },
+      chart: { tab: "book", panelId: "chartPanel" },
+      oi:    { tab: "book", panelId: "oiPanel" },
+      big:   { tab: "big",  panelId: "boListPanel" },
+      zones: { tab: "big",  panelId: "boChartPanel" },
+      log:   { tab: "big",  panelId: "boLogPanel" },
+    };
+    let activeMobileBox = "book";
+    window.__mobileBoxTabsReady = true;
+
+    function switchMobileBox(boxKey) {
+      const cfg = MOBILE_BOX_MAP[boxKey] || MOBILE_BOX_MAP.book;
+      activeMobileBox = MOBILE_BOX_MAP[boxKey] ? boxKey : "book";
+
+      document.querySelectorAll(".mob-tab-btn").forEach((b) => {
+        b.classList.toggle("active", b.getAttribute("data-mob") === activeMobileBox);
+      });
+
+      Object.values(MOBILE_BOX_MAP).forEach(({ panelId }) => {
+        const el = document.getElementById(panelId);
+        if (el) el.classList.toggle("mobile-active-box", panelId === cfg.panelId);
+      });
+
+      activeTab = cfg.tab;
+      document.getElementById("btnTabBook").classList.toggle("active", activeTab === "book");
+      document.getElementById("btnTabBig").classList.toggle("active", activeTab === "big");
+      document.getElementById("tabOrderBook").classList.toggle("hidden-tab", activeTab !== "book");
+      document.getElementById("tabBigOrders").classList.toggle("hidden-tab", activeTab !== "big");
+
+      if (activeMobileBox === "oi") {
+        centeredOiOnce = false;
+        bookAnim.lastOiSig = "";
+      }
+      if (latestState) {
+        requestAnimationFrame(() => renderAll(latestState));
       }
     }
 
@@ -1312,6 +1601,10 @@
       document.getElementById("btnTabBig").classList.toggle("active", activeTab === "big");
       document.getElementById("tabOrderBook").classList.toggle("hidden-tab", activeTab !== "book");
       document.getElementById("tabBigOrders").classList.toggle("hidden-tab", activeTab !== "big");
+      if (window.innerWidth <= 960) {
+        switchMobileBox(activeTab === "big" ? "big" : "book");
+        return;
+      }
       if (latestState) renderAll(latestState);
     }
 
@@ -1518,6 +1811,11 @@
       // Update Big Orders tab count badge live even when viewing Order Book tab
       const boCount = ((state.big_orders && state.big_orders.items) || []).length;
       document.getElementById("btnTabBig").textContent = boCount > 0 ? `Big Orders (${boCount})` : "Big Orders";
+      const mNavBadge = document.getElementById("mNavBigBadge");
+      if (mNavBadge) {
+        mNavBadge.textContent = String(boCount);
+        mNavBadge.style.display = boCount > 0 ? "inline-block" : "none";
+      }
 
       if (activeTab === "book") {
         // 2. Unified Price Ladder + Candles
@@ -1525,8 +1823,19 @@
         renderOrderBook(state, displayLadder);
         drawCandles(state, displayLadder);
 
-        // 3. Option Open Interest
-        renderOptionChain(state);
+        // 3. Option Open Interest (rebuild DOM only when OI updates or every ~1.2s)
+        const oc = state.option_chain || {};
+        const oiSig = `${state.symbol}_${(oc.rows || []).length}_${(oc.summary && oc.summary.total_ce_lots) || 0}_${(oc.summary && oc.summary.total_pe_lots) || 0}`;
+        const nowMs = Date.now();
+        if (oiSig !== bookAnim.lastOiSig || (nowMs - bookAnim.lastOiRenderTs) > 1200) {
+          bookAnim.lastOiSig = oiSig;
+          bookAnim.lastOiRenderTs = nowMs;
+          renderOptionChain(state);
+        } else if (oc.refresh_seconds) {
+          const rem = Math.max(0, (oc.refresh_seconds || 60) - (oc.age_seconds || 0));
+          const metaEl = document.getElementById("oiRefreshMeta");
+          if (metaEl) metaEl.textContent = `Next refresh in ${rem}s`;
+        }
       } else {
         // Tab 2: Big Orders Right Now + Resting Wall Zones + Strike Confluence
         renderBigOrders(state);
@@ -1538,7 +1847,7 @@
     }
 
     // ========================================================================
-    // BOX 2 (SEPARATE): EXACT GIF ORDER BOOK (Waiting · Bought/Sold · Pulled)
+    // BOX 2 (SEPARATE): 60 FPS ANIMATED GIF-STYLE ORDER BOOK
     // ========================================================================
     function renderOrderBook(state, _displayLadder) {
       const bs = Math.max(0.5, Number(state.band_size || 5));
@@ -1553,10 +1862,42 @@
       const bfEl = document.getElementById("bookFormingLbl");
       if (bfEl) bfEl.textContent = `forming candle · ${secInto}s`;
 
-      drawOrderBookCanvas(state);
+      drawOrderBookCanvas(state, 0);
     }
 
-    function drawOrderBookCanvas(state) {
+    function stepOrderBookPhysics(state, dt) {
+      if (!state) return;
+      const clampedDt = Math.min(0.08, Math.max(0.0, dt));
+      if (clampedDt <= 0) return;
+
+      const targetLtp = Number(state.ltp || state.mid_price || 25000);
+      const targetMid = Number(state.mid_price || targetLtp);
+      if (!bookAnim.ltp) bookAnim.ltp = targetLtp;
+      if (!bookAnim.mid) bookAnim.mid = targetMid;
+
+      const kFast = 1 - Math.exp(-clampedDt * 15.0);
+      const kPull = 1 - Math.exp(-clampedDt * 12.0);
+      bookAnim.ltp += (targetLtp - bookAnim.ltp) * kFast;
+      bookAnim.mid += (targetMid - bookAnim.mid) * (1 - Math.exp(-clampedDt * 9.0));
+
+      const fDecay = Math.exp(-clampedDt * 2.8);
+      const pDecay = Math.exp(-clampedDt * 2.2);
+
+      for (const rec of bookAnim.rows.values()) {
+        rec.dispBuy += (rec.rawBuy - rec.dispBuy) * kFast;
+        rec.dispSell += (rec.rawSell - rec.dispSell) * kFast;
+        rec.dispPullB += (rec.rawPullB - rec.dispPullB) * kPull;
+        rec.dispPullS += (rec.rawPullS - rec.dispPullS) * kPull;
+        rec.flashBought = rec.flashBought * fDecay < 0.02 ? 0 : rec.flashBought * fDecay;
+        rec.flashSold = rec.flashSold * fDecay < 0.02 ? 0 : rec.flashSold * fDecay;
+        rec.flashPullB = rec.flashPullB * pDecay < 0.02 ? 0 : rec.flashPullB * pDecay;
+        rec.flashPullS = rec.flashPullS * pDecay < 0.02 ? 0 : rec.flashPullS * pDecay;
+        rec.pulseBuy = rec.pulseBuy * fDecay < 0.02 ? 0 : rec.pulseBuy * fDecay;
+        rec.pulseSell = rec.pulseSell * fDecay < 0.02 ? 0 : rec.pulseSell * fDecay;
+      }
+    }
+
+    function drawOrderBookCanvas(state, dt = 0) {
       const canvas = document.getElementById("bookCanvas");
       if (!canvas || !canvas.parentElement) return;
       const rect = canvas.parentElement.getBoundingClientRect();
@@ -1579,9 +1920,10 @@
       if (autoBtn) autoBtn.classList.toggle("active", isChartAuto("dom"));
 
       const bs = Math.max(0.5, Number(state.band_size || 5));
-      const mid = Number(state.mid_price || state.ltp || 25000);
-      const ltp = Number(state.ltp || mid);
-      const centerSnap = Math.round(mid / bs) * bs;
+      const rawMid = Number(state.mid_price || state.ltp || 25000);
+      const rawLtp = Number(state.ltp || rawMid);
+      const animLtp = bookAnim.ltp || rawLtp;
+      const centerSnap = Math.round(rawMid / bs) * bs;
 
       // Exact ~22-row vertical spacing matching GIF (zoomable smoothly via wheel or dragging price spine)
       const plotH = H;
@@ -1592,15 +1934,17 @@
       const lowP = centerP - span / 2;
       const yOf = (p) => ((highP - p) / span) * plotH;
 
-      // Exact GIF column proportions:
-      // [Left Amber Dot] [Buy Lots + Linear Green/Amber Bar] | [Price 25,410 ◀] | [Linear Coral/Amber Bar + Sell Lots] [Right Amber Dot] [Big Sellers · 12 sold · 536 pulled]
-      const priceX = Math.floor(W * 0.335);
-      const buyAnchorX = priceX - 28;
-      const sellAnchorX = priceX + 34;
-      const maxBarW = Math.max(44, Math.floor(W * 0.145));
-      const buyDotX = Math.max(15, buyAnchorX - maxBarW - 36);
-      const calloutX = Math.min(Math.max(sellAnchorX + maxBarW + 38, W - 185), sellAnchorX + maxBarW + 44);
-      const sellDotX = calloutX - 15;
+      // Exact GIF column proportions (responsive for both Desktop & Android Portrait 360–430px):
+      const isNarrow = W < 460;
+      const priceX = Math.floor(W * (isNarrow ? 0.285 : 0.335));
+      const buyAnchorX = priceX - (isNarrow ? 24 : 28);
+      const sellAnchorX = priceX + (isNarrow ? 29 : 34);
+      const maxBarW = Math.max(isNarrow ? 28 : 44, Math.floor(W * (isNarrow ? 0.108 : 0.145)));
+      const buyDotX = isNarrow ? 9 : Math.max(15, buyAnchorX - maxBarW - 36);
+      const calloutX = isNarrow
+        ? (sellAnchorX + maxBarW + 25)
+        : Math.min(Math.max(sellAnchorX + maxBarW + 38, W - 185), sellAnchorX + maxBarW + 44);
+      const sellDotX = calloutX - (isNarrow ? 10 : 15);
 
       if (view.hoverX >= priceX - 28 && view.hoverX <= priceX + 34) {
         ctx.fillStyle = "rgba(148, 163, 184, 0.05)";
@@ -1619,15 +1963,21 @@
 
       const topBand = Math.floor(highP / dispStep) * dispStep;
       const botBand = Math.ceil(lowP / dispStep) * dispStep;
-      const activeBand = Math.round(ltp / dispStep) * dispStep;
+      const activeBand = Math.round(rawLtp / dispStep) * dispStep;
 
       const visBands = [];
-      let maxScaleLots = 260;
+      let maxWait = 0;
+      let maxCombined = 0;
+
       for (let p = topBand; p >= botBand - 1e-6; p = Math.round((p - dispStep) * 100) / 100) {
         let buyL = 0, sellL = 0, pullB = 0, pullS = 0, boughtL = 0, soldL = 0, bigB = false, bigS = false;
+        let dBuy = 0, dSell = 0, dPullB = 0, dPullS = 0;
+        let flBt = 0, flSd = 0, flPB = 0, flPS = 0, plB = 0, plS = 0;
+
         for (let sub = 0; sub < stride; sub++) {
           const sp = (p - sub * bs).toFixed(2);
           const hit = rowMap.get(sp);
+          const anim = bookAnim.rows.get(sp);
           if (hit) {
             buyL += hit.buy_lots || 0;
             sellL += hit.sell_lots || 0;
@@ -1638,13 +1988,36 @@
             if (hit.big_buyer) bigB = true;
             if (hit.big_seller) bigS = true;
           }
+          if (anim) {
+            dBuy += anim.dispBuy;
+            dSell += anim.dispSell;
+            dPullB += anim.dispPullB;
+            dPullS += anim.dispPullS;
+            flBt = Math.max(flBt, anim.flashBought);
+            flSd = Math.max(flSd, anim.flashSold);
+            flPB = Math.max(flPB, anim.flashPullB);
+            flPS = Math.max(flPS, anim.flashPullS);
+            plB = Math.max(plB, anim.pulseBuy);
+            plS = Math.max(plS, anim.pulseSell);
+          } else if (hit) {
+            dBuy += hit.buy_lots || 0;
+            dSell += hit.sell_lots || 0;
+            dPullB += hit.pulled_buy || 0;
+            dPullS += hit.pulled_sell || 0;
+          }
         }
-        // Scale against waiting lots + realistic ghost display cap so small rows (15, 18, 37) stay crisp 1–3px linear ticks!
-        maxScaleLots = Math.max(maxScaleLots, buyL, sellL, Math.min(buyL + pullB, 700), Math.min(sellL + pullS, 700));
+
+        maxWait = Math.max(maxWait, dBuy, dSell);
+        maxCombined = Math.max(maxCombined, dBuy + Math.min(dPullB, Math.max(40, dBuy * 3.5)), dSell + Math.min(dPullS, Math.max(40, dSell * 3.5)));
+
         visBands.push({
           price: p,
           buy_lots: Math.round(buyL),
           sell_lots: Math.round(sellL),
+          disp_buy: Math.max(0, dBuy),
+          disp_sell: Math.max(0, dSell),
+          disp_pull_b: Math.max(0, dPullB),
+          disp_pull_s: Math.max(0, dPullS),
           pulled_buy: Math.round(pullB),
           pulled_sell: Math.round(pullS),
           pulled_total: Math.round(pullB + pullS),
@@ -1652,28 +2025,49 @@
           sold_lots: Math.round(soldL),
           big_buyer: bigB,
           big_seller: bigS,
+          flBt, flSd, flPB, flPS, plB, plS,
         });
       }
 
-      // PURE LINEAR SCALING (matching GIF: 15->1.5px, 37->3.5px, 78->7px, 129->12px, 1,154->full green wall!)
+      // ADAPTIVE DYNAMIC LINEAR SCALE:
+      // Works seamlessly whether Upstox Live has 6–45 lots (5-lvl) OR 1,000+ lot institutional walls (30-lvl / Demo)!
+      const targetScale = Math.max(10, maxWait * 1.08, Math.min(maxCombined * 0.92, Math.max(45, maxWait * 2.2)));
+      if (!bookAnim.scaleMax || bookAnim.scaleMax < 1) {
+        bookAnim.scaleMax = targetScale;
+      } else if (dt > 0) {
+        const sRate = 1 - Math.exp(-Math.min(0.08, dt) * 5.0);
+        bookAnim.scaleMax += (targetScale - bookAnim.scaleMax) * sRate;
+      }
+      const maxScaleLots = Math.max(8, bookAnim.scaleMax);
+
       const widthOfLots = (lots) => {
-        if (lots <= 0) return 0;
-        return Math.min(maxBarW, Math.max(1.4, (lots / maxScaleLots) * maxBarW));
+        if (lots <= 0.08) return 0;
+        return Math.min(maxBarW, Math.max(1.6, (lots / maxScaleLots) * maxBarW));
       };
 
       const rowStepPx = (dispStep / span) * plotH;
-      // Tall stacked rectangular blocks (82% of row height, leaving ~2.5px dark hairline gap just like GIF!)
       const barH = Math.max(8, Math.min(20, Math.round(rowStepPx * 0.82)));
+      const nowSec = performance.now() * 0.001;
+      const pullDotMin = (state.source === "upstox" && (state.feed_levels || 5) <= 5) ? 4 : 10;
 
-      const drawGlowDot = (cx, cy, pulledAmt) => {
-        const rad = Math.min(6.8, 2.2 + Math.sqrt(pulledAmt) * 0.22);
+      const drawGlowDot = (cx, cy, pulledAmt, flashAmt) => {
+        const breathe = 1.0 + 0.08 * Math.sin(nowSec * 5.2 + cy * 0.1);
+        const rad = Math.min(7.2, (2.2 + Math.sqrt(Math.max(1, pulledAmt)) * 0.24) * breathe + flashAmt * 1.8);
+        // Expanding halo ring when a fresh pull fires
+        if (flashAmt > 0.05) {
+          ctx.beginPath();
+          ctx.arc(cx, cy, rad + 2.5 + (1 - flashAmt) * 6.0, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(245, 178, 72, ${(flashAmt * 0.55).toFixed(3)})`;
+          ctx.lineWidth = 1.3;
+          ctx.stroke();
+        }
         ctx.beginPath();
-        ctx.arc(cx, cy, rad + 2.0, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(205, 142, 56, 0.18)";
+        ctx.arc(cx, cy, rad + 2.2, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(215, 150, 58, ${(0.20 + flashAmt * 0.25).toFixed(3)})`;
         ctx.fill();
         ctx.beginPath();
         ctx.arc(cx, cy, rad, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(212, 150, 62, 0.72)";
+        ctx.fillStyle = `rgba(224, 160, 64, ${(0.74 + flashAmt * 0.24).toFixed(3)})`;
         ctx.fill();
       };
 
@@ -1684,50 +2078,58 @@
         const isActive = Math.abs(r.price - activeBand) < 1e-4;
         const pStr = Number.isInteger(r.price) ? r.price.toLocaleString("en-IN") : r.price.toFixed(1);
 
-        // 1. Center Price Spine + Bold White Active Row `25,410 ◀`
+        // Subtle execution flash highlight across the active row when trades hit
+        const tradeGlow = Math.max(r.flBt, r.flSd);
+        if (tradeGlow > 0.04) {
+          ctx.fillStyle = r.flBt >= r.flSd
+            ? `rgba(93, 196, 107, ${(tradeGlow * 0.11).toFixed(3)})`
+            : `rgba(229, 109, 86, ${(tradeGlow * 0.11).toFixed(3)})`;
+          ctx.fillRect(buyDotX - 8, y - barH * 0.55, (W - buyDotX), barH * 1.1);
+        }
+
+        // 1. Center Price Spine + Bold White Active Row
         ctx.textAlign = "center";
         if (isActive) {
           ctx.fillStyle = isLight ? "#0f172a" : "#ffffff";
           ctx.font = "bold 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
           ctx.fillText(pStr, priceX - 2, y + 4);
-          // Bold crisp white triangle `◀` (exact GIF size & position!)
-          ctx.beginPath();
-          ctx.moveTo(priceX + 21, y);
-          ctx.lineTo(priceX + 28.5, y - 5);
-          ctx.lineTo(priceX + 28.5, y + 5);
-          ctx.closePath();
-          ctx.fill();
         } else {
           ctx.fillStyle = isLight ? "#475569" : "#9aa2ac";
           ctx.font = "11.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
           ctx.fillText(pStr, priceX - 2, y + 4);
         }
 
-        // Delicate baseline tick `|` ONLY on sides that have resting/pulled lots (empty rows like 25,405 have NO ticks!)
+        // Delicate baseline tick `|` ONLY on sides that have resting/pulled lots
         ctx.strokeStyle = isLight ? "rgba(100,116,139,0.45)" : "rgba(148,163,184,0.38)";
         ctx.lineWidth = 1;
         ctx.beginPath();
-        if (r.buy_lots > 0 || r.pulled_buy > 0) {
+        if (r.disp_buy > 0.2 || r.disp_pull_b > 0.4) {
           ctx.moveTo(buyAnchorX, y - barH * 0.5);
           ctx.lineTo(buyAnchorX, y + barH * 0.5);
         }
-        if (r.sell_lots > 0 || r.pulled_sell > 0) {
+        if (r.disp_sell > 0.2 || r.disp_pull_s > 0.4) {
           ctx.moveTo(sellAnchorX, y - barH * 0.5);
           ctx.lineTo(sellAnchorX, y + barH * 0.5);
         }
         ctx.stroke();
 
-        // 2. BUY SIDE (Left): Warm Ochre Pulled Ghost + Solid Sage-Emerald Waiting Bar + Lot Count + Glowing Amber Dot
-        const wBuy = widthOfLots(r.buy_lots);
-        const wBuyGhost = r.pulled_buy > 0 ? widthOfLots(r.buy_lots + Math.min(r.pulled_buy, maxScaleLots * 0.48)) : 0;
+        // 2. BUY SIDE (Left): Animated Warm Ochre Pulled Ghost + Gliding Green Waiting Bar + Flash + Glowing Dot
+        const wBuy = widthOfLots(r.disp_buy);
+        const wBuyGhost = r.disp_pull_b > 0.3 ? widthOfLots(r.disp_buy + Math.min(r.disp_pull_b, maxScaleLots * 0.58)) : 0;
 
-        if (wBuyGhost > wBuy) {
-          ctx.fillStyle = "rgba(196, 130, 50, 0.56)";
+        if (wBuyGhost > wBuy + 0.5) {
+          const gAlpha = 0.54 + r.flPB * 0.32;
+          ctx.fillStyle = `rgba(${Math.round(198 + r.flPB * 44)}, ${Math.round(132 + r.flPB * 42)}, 52, ${gAlpha.toFixed(3)})`;
           ctx.fillRect(buyAnchorX - wBuyGhost, y - barH / 2, wBuyGhost - wBuy, barH);
         }
-        if (r.buy_lots > 0) {
+        if (wBuy > 0) {
           ctx.fillStyle = r.big_buyer ? "#63ca71" : "#56b864";
           ctx.fillRect(buyAnchorX - wBuy, y - barH / 2, wBuy, barH);
+          if (r.flSd > 0.05 || r.plB > 0.05) {
+            const hl = Math.max(r.flSd, r.plB * 0.65);
+            ctx.fillStyle = `rgba(167, 243, 208, ${(hl * 0.55).toFixed(3)})`;
+            ctx.fillRect(buyAnchorX - wBuy, y - barH / 2, Math.min(wBuy, 3.5), barH);
+          }
         }
         if (r.buy_lots > 0) {
           const leftBarEdge = buyAnchorX - Math.max(wBuy, wBuyGhost);
@@ -1738,21 +2140,27 @@
             : "11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
           ctx.fillText(fmtInt(r.buy_lots), leftBarEdge - 5, y + 4);
         }
-        if (r.pulled_buy >= 12) {
-          drawGlowDot(buyDotX, y, r.pulled_buy);
+        if (r.pulled_buy >= pullDotMin) {
+          drawGlowDot(buyDotX, y, r.pulled_buy, r.flPB);
         }
 
-        // 3. SELL SIDE (Right): Warm Ochre Pulled Ghost + Solid Terracotta-Coral Waiting Bar + Lot Count + Glowing Amber Dot
-        const wSell = widthOfLots(r.sell_lots);
-        const wSellGhost = r.pulled_sell > 0 ? widthOfLots(r.sell_lots + Math.min(r.pulled_sell, maxScaleLots * 0.48)) : 0;
+        // 3. SELL SIDE (Right): Animated Warm Ochre Pulled Ghost + Gliding Coral Waiting Bar + Flash + Glowing Dot
+        const wSell = widthOfLots(r.disp_sell);
+        const wSellGhost = r.disp_pull_s > 0.3 ? widthOfLots(r.disp_sell + Math.min(r.disp_pull_s, maxScaleLots * 0.58)) : 0;
 
-        if (wSellGhost > wSell) {
-          ctx.fillStyle = "rgba(196, 130, 50, 0.56)";
+        if (wSellGhost > wSell + 0.5) {
+          const gAlpha = 0.54 + r.flPS * 0.32;
+          ctx.fillStyle = `rgba(${Math.round(198 + r.flPS * 44)}, ${Math.round(132 + r.flPS * 42)}, 52, ${gAlpha.toFixed(3)})`;
           ctx.fillRect(sellAnchorX + wSell, y - barH / 2, wSellGhost - wSell, barH);
         }
-        if (r.sell_lots > 0) {
+        if (wSell > 0) {
           ctx.fillStyle = r.big_seller ? "#e36f52" : "#cf6d4d";
           ctx.fillRect(sellAnchorX, y - barH / 2, wSell, barH);
+          if (r.flBt > 0.05 || r.plS > 0.05) {
+            const hl = Math.max(r.flBt, r.plS * 0.65);
+            ctx.fillStyle = `rgba(254, 202, 202, ${(hl * 0.55).toFixed(3)})`;
+            ctx.fillRect(sellAnchorX + Math.max(0, wSell - 3.5), y - barH / 2, Math.min(wSell, 3.5), barH);
+          }
         }
         if (r.sell_lots > 0) {
           const rightBarEdge = sellAnchorX + Math.max(wSell, wSellGhost);
@@ -1763,51 +2171,69 @@
             : "11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
           ctx.fillText(fmtInt(r.sell_lots), rightBarEdge + 5, y + 4);
         }
-        if (r.pulled_sell >= 12) {
-          drawGlowDot(sellDotX, y, r.pulled_sell);
+        if (r.pulled_sell >= pullDotMin) {
+          drawGlowDot(sellDotX, y, r.pulled_sell, r.flPS);
         }
 
-        // 4. RIGHT CALLOUTS ("Big Sellers", "Big Buyers", "12 sold", "14 bought", "536 pulled" gold / "10 pulled" muted)
+        // 4. RIGHT CALLOUTS ("Big Sellers", "Big Buyers", "12 sold", "19 bought", "26 pulled")
         ctx.textAlign = "left";
         let tx = calloutX;
-        if (r.big_buyer && (!r.big_seller || r.buy_lots >= r.sell_lots) && tx < W - 45) {
-          ctx.font = "bold 11px -apple-system, BlinkMacSystemFont, sans-serif";
+        const cFs = isNarrow ? "10px" : "11px";
+        const cGap = isNarrow ? 5 : 7;
+        if (r.big_buyer && (!r.big_seller || r.buy_lots >= r.sell_lots) && tx < W - 40) {
+          ctx.font = `bold ${cFs} -apple-system, BlinkMacSystemFont, sans-serif`;
           ctx.fillStyle = "#5dc46b";
           ctx.fillText("Big Buyers", tx, y + 4);
-          tx += ctx.measureText("Big Buyers").width + 7;
-        } else if (r.big_seller && tx < W - 45) {
-          ctx.font = "bold 11px -apple-system, BlinkMacSystemFont, sans-serif";
+          tx += ctx.measureText("Big Buyers").width + cGap;
+        } else if (r.big_seller && tx < W - 40) {
+          ctx.font = `bold ${cFs} -apple-system, BlinkMacSystemFont, sans-serif`;
           ctx.fillStyle = "#e56d56";
           ctx.fillText("Big Sellers", tx, y + 4);
-          tx += ctx.measureText("Big Sellers").width + 7;
+          tx += ctx.measureText("Big Sellers").width + cGap;
         }
 
-        if (r.sold_lots >= 5 && r.sold_lots >= r.bought_lots && tx < W - 38) {
+        if (r.sold_lots >= 3 && r.sold_lots >= r.bought_lots && tx < W - 34) {
           const sTxt = `${fmtInt(r.sold_lots)} sold`;
-          ctx.font = "600 11px -apple-system, BlinkMacSystemFont, sans-serif";
-          ctx.fillStyle = "#d96d55";
+          ctx.font = r.flSd > 0.2 ? `bold ${cFs} -apple-system, BlinkMacSystemFont, sans-serif` : `600 ${cFs} -apple-system, BlinkMacSystemFont, sans-serif`;
+          ctx.fillStyle = r.flSd > 0.2 ? "#ff8b73" : "#d96d55";
           ctx.fillText(sTxt, tx, y + 4);
-          tx += ctx.measureText(sTxt).width + 7;
-        } else if (r.bought_lots >= 5 && tx < W - 38) {
+          tx += ctx.measureText(sTxt).width + cGap;
+        } else if (r.bought_lots >= 3 && tx < W - 34) {
           const bTxt = `${fmtInt(r.bought_lots)} bought`;
-          ctx.font = "600 11px -apple-system, BlinkMacSystemFont, sans-serif";
-          ctx.fillStyle = "#5dc46b";
+          ctx.font = r.flBt > 0.2 ? `bold ${cFs} -apple-system, BlinkMacSystemFont, sans-serif` : `600 ${cFs} -apple-system, BlinkMacSystemFont, sans-serif`;
+          ctx.fillStyle = r.flBt > 0.2 ? "#7cf08b" : "#5dc46b";
           ctx.fillText(bTxt, tx, y + 4);
-          tx += ctx.measureText(bTxt).width + 7;
+          tx += ctx.measureText(bTxt).width + cGap;
         }
 
-        if (r.pulled_total >= 8 && tx < W - 36) {
+        if (r.pulled_total >= 5 && tx < W - 32) {
           const pTxt = `${fmtInt(r.pulled_total)} pulled`;
-          if (r.pulled_total >= 25) {
-            ctx.font = "bold 11px -apple-system, BlinkMacSystemFont, sans-serif";
-            ctx.fillStyle = "#dfa03b";
+          const pFlash = Math.max(r.flPB, r.flPS);
+          if (r.pulled_total >= 20 || pFlash > 0.25) {
+            ctx.font = `bold ${cFs} -apple-system, BlinkMacSystemFont, sans-serif`;
+            ctx.fillStyle = pFlash > 0.25 ? "#fbbf24" : "#dfa03b";
           } else {
-            ctx.font = "500 10.5px -apple-system, BlinkMacSystemFont, sans-serif";
+            ctx.font = `500 ${isNarrow ? "9.5px" : "10.5px"} -apple-system, BlinkMacSystemFont, sans-serif`;
             ctx.fillStyle = "#6e7681";
           }
           ctx.fillText(pTxt, tx, y + 4);
         }
       }
+
+      // Smoothly gliding bold white active `◀` pointer tracking animated LTP!
+      const pointerSnap = Math.round(animLtp / dispStep) * dispStep;
+      const pointerBlendP = pointerSnap + Math.max(-dispStep * 0.35, Math.min(dispStep * 0.35, (animLtp - pointerSnap) * 0.45));
+      const py = yOf(pointerBlendP);
+      if (py >= 10 && py <= plotH - 10) {
+        ctx.fillStyle = isLight ? "#0f172a" : "#ffffff";
+        ctx.beginPath();
+        ctx.moveTo(priceX + 21, py);
+        ctx.lineTo(priceX + 28.5, py - 5);
+        ctx.lineTo(priceX + 28.5, py + 5);
+        ctx.closePath();
+        ctx.fill();
+      }
+
       ctx.textAlign = "left";
 
       canvas._geom = {
@@ -1959,11 +2385,16 @@
           const cx = leftPad + (i - leftEdgeBar + 0.5) * slotW;
           if (cx < leftPad - slotW || cx > plotRight + slotW) continue;
 
+          const isForming = (i === allCandles.length - 1);
+          const liveClose = isForming && bookAnim.mid ? bookAnim.mid : c.close;
+          const liveHigh = isForming ? Math.max(c.high, liveClose) : c.high;
+          const liveLow = isForming ? Math.min(c.low, liveClose) : c.low;
+
           const yO = yOf(c.open);
-          const yC = yOf(c.close);
-          const yH = yOf(c.high);
-          const yL = yOf(c.low);
-          const isUp = c.close >= c.open;
+          const yC = yOf(liveClose);
+          const yH = yOf(liveHigh);
+          const yL = yOf(liveLow);
+          const isUp = liveClose >= c.open;
           const col = isUp ? "#58c977" : "#df6b53";
 
           ctx.strokeStyle = col;
@@ -1978,10 +2409,20 @@
           ctx.fillStyle = col;
           ctx.fillRect(cx - bodyW / 2, topY, bodyW, bh);
 
-          if (i === allCandles.length - 1) {
+          if (isForming) {
             ctx.strokeStyle = "#eab308";
             ctx.lineWidth = 1;
             ctx.strokeRect(cx - bodyW / 2 - 0.5, topY - 0.5, bodyW + 1, bh + 1);
+            // Live breathing pulse dot on the forming candle close
+            const pulseR = 2.0 + 0.9 * (0.5 + 0.5 * Math.sin(performance.now() * 0.006));
+            ctx.beginPath();
+            ctx.arc(cx, yC, pulseR + 2.2, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(234, 179, 8, 0.22)";
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(cx, yC, 1.9, 0, Math.PI * 2);
+            ctx.fillStyle = "#fde047";
+            ctx.fill();
           }
         }
         ctx.restore();
@@ -2002,8 +2443,9 @@
         }
       }
 
-      // Dashed LTP line + Right-Axis Live Price Pill
-      const ltpY = yOf(ltp);
+      // Smoothly Gliding Dashed LTP line + Right-Axis Live Price Pill
+      const smoothLtp = bookAnim.ltp || ltp;
+      const ltpY = yOf(smoothLtp);
       if (ltpY >= 6 && ltpY <= plotH - 6) {
         ctx.save();
         ctx.setLineDash([3, 4]);
@@ -2700,6 +3142,112 @@
         view.hoverY = y;
         redraw();
       }, { passive: false });
+
+      // Full Android Mobile Touch Support: 1-Finger Pan / Axis Zoom + 2-Finger Pinch Zoom + Double-Tap Reset
+      let touchState = null;
+      let lastTapTs = 0;
+
+      canvas.addEventListener("touchstart", (ev) => {
+        const g = canvas._geom;
+        if (!g) return;
+        const r = canvas.getBoundingClientRect();
+
+        if (ev.touches.length === 1) {
+          const now = Date.now();
+          const x = ev.touches[0].clientX - r.left;
+          const y = ev.touches[0].clientY - r.top;
+          if (now - lastTapTs < 300) {
+            ev.preventDefault();
+            resetChart(key);
+            lastTapTs = 0;
+            return;
+          }
+          lastTapTs = now;
+          const z = zoneAt(x, y, g);
+          touchState = { kind: "one", mode: z, lastX: x, lastY: y };
+          view.dragging = true;
+        } else if (ev.touches.length === 2) {
+          ev.preventDefault();
+          const dx = ev.touches[0].clientX - ev.touches[1].clientX;
+          const dy = ev.touches[0].clientY - ev.touches[1].clientY;
+          const midX = ((ev.touches[0].clientX + ev.touches[1].clientX) * 0.5) - r.left;
+          touchState = {
+            kind: "pinch",
+            startDist: Math.max(12, Math.hypot(dx, dy)),
+            startBars: view.visibleBars,
+            startYZoom: view.yZoom,
+            startPan: view.panBars,
+            midX,
+          };
+          view.dragging = true;
+        }
+      }, { passive: false });
+
+      canvas.addEventListener("touchmove", (ev) => {
+        const g = canvas._geom;
+        if (!g || !touchState) return;
+        ev.preventDefault();
+        const r = canvas.getBoundingClientRect();
+
+        if (touchState.kind === "one" && ev.touches.length === 1) {
+          const x = ev.touches[0].clientX - r.left;
+          const y = ev.touches[0].clientY - r.top;
+          const dx = x - touchState.lastX;
+          const dy = y - touchState.lastY;
+          touchState.lastX = x;
+          touchState.lastY = y;
+
+          if (touchState.mode === "price") {
+            unlockObSyncIfNeeded();
+            view.yZoom = Math.max(0.25, Math.min(6.0, view.yZoom * Math.exp(dy * 0.007)));
+          } else if (touchState.mode === "time") {
+            view.visibleBars = Math.max(12, Math.min(380, view.visibleBars * Math.exp(-dx * 0.007)));
+          } else {
+            view.panBars += dx / Math.max(1, g.slotW);
+            unlockObSyncIfNeeded();
+            view.yPanPts += (dy / Math.max(20, g.plotH)) * g.span;
+          }
+          view.hoverX = x;
+          view.hoverY = y;
+          redraw();
+        } else if (ev.touches.length === 2) {
+          const dx = ev.touches[0].clientX - ev.touches[1].clientX;
+          const dy = ev.touches[0].clientY - ev.touches[1].clientY;
+          const dist = Math.max(12, Math.hypot(dx, dy));
+          if (touchState.kind !== "pinch") {
+            touchState = {
+              kind: "pinch",
+              startDist: dist,
+              startBars: view.visibleBars,
+              startYZoom: view.yZoom,
+              startPan: view.panBars,
+              midX: ((ev.touches[0].clientX + ev.touches[1].clientX) * 0.5) - r.left,
+            };
+            return;
+          }
+          const scale = touchState.startDist / dist; // pinch out (dist bigger) => scale < 1 => zoom in!
+          if (key === "dom") {
+            view.yZoom = Math.max(0.3, Math.min(5.0, touchState.startYZoom * scale));
+          } else {
+            unlockObSyncIfNeeded();
+            const newBars = Math.max(12, Math.min(380, touchState.startBars * scale));
+            const fracRight = Math.max(0, Math.min(1, (g.plotRight - touchState.midX) / Math.max(1, g.plotW)));
+            view.panBars = touchState.startPan + (touchState.startBars - newBars) * fracRight;
+            view.visibleBars = newBars;
+            view.yZoom = Math.max(0.25, Math.min(6.0, touchState.startYZoom * Math.pow(scale, 0.7)));
+          }
+          redraw();
+        }
+      }, { passive: false });
+
+      const endTouch = () => {
+        touchState = null;
+        view.dragging = false;
+        view.hoverX = -1;
+        view.hoverY = -1;
+      };
+      canvas.addEventListener("touchend", endTouch);
+      canvas.addEventListener("touchcancel", endTouch);
     }
 
     bindBrokerChart("candleCanvas", "ob");
@@ -2799,14 +3347,67 @@
       if (!latestState) return;
       if (activeTab === "book") {
         drawCandles(latestState, computeDisplayLadder(latestState));
-        drawOrderBookCanvas(latestState);
+        drawOrderBookCanvas(latestState, 0);
       } else {
         drawBigOrderZones(latestState);
       }
     });
 
+    // Real-time Server-Sent Events stream (~10 Hz live tick stream) + Automatic Watchdog Fallback
+    let liveEvtSource = null;
+    function connectLiveStream() {
+      if (typeof EventSource === "undefined") return;
+      try {
+        if (liveEvtSource) {
+          try { liveEvtSource.close(); } catch (_e) {}
+        }
+        liveEvtSource = new EventSource("/api/stream");
+        liveEvtSource.onmessage = (ev) => {
+          try {
+            const parsed = JSON.parse(ev.data);
+            ingestState(parsed);
+          } catch (_err) {}
+        };
+        liveEvtSource.onerror = () => {
+          // Browser automatically retries EventSource; watchdog below guarantees zero stall
+        };
+      } catch (_e) {}
+    }
+
+    // 60 FPS Continuous Smooth Canvas Animation Loop (gliding bars, trade flashes, pulled ghosts, live candle tip)
+    function animLoop(nowTs) {
+      const dt = Math.min(0.08, Math.max(0.001, (nowTs - bookAnim.lastFrameTs) * 0.001));
+      bookAnim.lastFrameTs = nowTs;
+
+      if (latestState && !document.hidden) {
+        stepOrderBookPhysics(latestState, dt);
+        if (activeTab === "book") {
+          const displayLadder = computeDisplayLadder(latestState);
+          drawOrderBookCanvas(latestState, dt);
+          drawCandles(latestState, displayLadder);
+        }
+      }
+      requestAnimationFrame(animLoop);
+    }
+
+    if (navigator.userAgent && navigator.userAgent.includes("NiftyOrderBookAPK")) {
+      const apkBtn = document.getElementById("mobApkLink");
+      if (apkBtn) apkBtn.style.display = "none";
+    }
+
     fetchState();
-    setInterval(fetchState, REFRESH_MS);
+    connectLiveStream();
+    requestAnimationFrame(animLoop);
+
+    // Watchdog: if SSE stream stalls > 2.2s (e.g. proxy reconnect), poll /api/state seamlessly
+    setInterval(() => {
+      if (Date.now() - bookAnim.lastStreamTs > 2200) {
+        fetchState();
+        if (!liveEvtSource || liveEvtSource.readyState === 2) {
+          connectLiveStream();
+        }
+      }
+    }, 1800);
   </script>
 </body>
 </html>

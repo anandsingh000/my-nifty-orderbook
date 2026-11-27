@@ -14,14 +14,14 @@ BAND_SIZE = 5.0                  # Order book price band grouping size in index 
 DEMO_LEVELS = 20                 # Number of waiting order levels on each side in demo mode
 DEMO_LOT_SIZE = 65               # Lot size used to count lots in demo mode (live mode reads exact broker lot size)
 HIGHLIGHT_TOP_N = 3              # Number of largest order bands highlighted solid & labelled on each side
-BOOK_REFRESH_SECONDS = 1.0       # How often demo order book updates and browser refreshes (in seconds)
+BOOK_REFRESH_SECONDS = 0.18      # Real-time demo tick interval (~5.5 Hz live order-flow stream matching GIF)
 OI_REFRESH_SECONDS = 60          # How often option chain open interest refreshes (seconds; keeps API usage tiny)
 OI_RANGE_POINTS = 500            # Option chain strike window (+/- points around current NIFTY price)
 OI_STEP_POINTS = 50              # Option strike interval in points for NIFTY (BANKNIFTY auto-scales to 100)
 MAX_CANDLES = 375                # Maximum 1-minute candles kept in memory (full 6h15m NSE/BSE session)
 MAX_LADDER_ROWS = 45             # Maximum price ladder rows rendered at once so the book stays readable
 RECONNECT_DELAY_SECONDS = 10     # Seconds to wait before reconnecting Upstox WebSocket after a drop
-UPSTOX_DEPTH_MODE = "full"       # Upstox WebSocket mode: "full" (free 5 levels) or "full_d30" (30 levels, Plus Pack)
+UPSTOX_DEPTH_MODE = "full_d30"   # Try 30-level depth ("full_d30") first; auto-falls back to 5-level ("full") if needed
 HOST = "0.0.0.0"                 # Server bind host (set to "127.0.0.1" on your own PC for local-only access)
 PORT = 8000                      # HTTP port where the web screen is served (http://127.0.0.1:8000)
 
@@ -317,6 +317,9 @@ def build_grouped_ladder(
 class MarketScreenEngine:
     def __init__(self):
         self.lock = threading.Lock()
+        self._stream_cond = threading.Condition()
+        self._stream_seq = 0
+
         env_cfg = load_env_config()
         token_present = bool(get_upstox_token())
 
@@ -330,9 +333,10 @@ class MarketScreenEngine:
 
         self.symbol = DEFAULT_SYMBOL
         self.band_size = float(BAND_SIZE)
-        self.depth_mode = (env_cfg.get("UPSTOX_DEPTH_MODE") or UPSTOX_DEPTH_MODE or "full").strip()
+        self.depth_mode = (env_cfg.get("UPSTOX_DEPTH_MODE") or UPSTOX_DEPTH_MODE or "full_d30").strip()
         if self.depth_mode not in ("full", "full_d30"):
-            self.depth_mode = "full"
+            self.depth_mode = "full_d30"
+        self._d30_auto_fallback_done = False
 
         # Shared live state
         self.running = True
@@ -345,6 +349,17 @@ class MarketScreenEngine:
         threading.Thread(target=self._demo_loop, daemon=True).start()
         if self.source == "upstox":
             self._start_upstox_session()
+
+    def _notify_stream(self):
+        with self._stream_cond:
+            self._stream_seq += 1
+            self._stream_cond.notify_all()
+
+    def wait_for_tick(self, last_seq: int, timeout: float = 0.8) -> int:
+        with self._stream_cond:
+            if self._stream_seq == last_seq:
+                self._stream_cond.wait(timeout=timeout)
+            return self._stream_seq
 
     def _reset_symbol_state(self, symbol: str):
         defaults = SYMBOL_DEFAULTS.get(symbol, SYMBOL_DEFAULTS["NIFTY"])
@@ -367,6 +382,9 @@ class MarketScreenEngine:
         self.best_ask = base + 0.5
         self.bids: list[tuple[float, int]] = []
         self.asks: list[tuple[float, int]] = []
+        # Rolling Level-2 memory book for 5-level feeds (retains recently observed out-of-window liquidity)
+        self._l2_bid_mem: dict[float, tuple[int, float]] = {}
+        self._l2_ask_mem: dict[float, tuple[int, float]] = {}
         self.candles: list[dict] = []
         self.option_rows: list[dict] = []
         self.option_summary: dict = {}
@@ -814,44 +832,64 @@ class MarketScreenEngine:
         step_scale = defaults.get("step_scale", 1.0)
         w = int(defaults.get("big_band", 5))
 
-        # Gentle wandering price with subtle bounce off resting walls
-        drift = (defaults["base_price"] - self.mid_price) * 0.04
-        move = random.gauss(drift, 0.45 * step_scale)
-        self.mid_price = round(self.mid_price + move, 2)
-        half_spread = random.choice([0.4, 0.6, 1.0]) * step_scale
-        anchor = round(self.mid_price / w) * w
+        # Smooth micro-tick price drift (~5.5 Hz stream matching 20fps GIF rhythm)
+        raw_mid = getattr(self, "_demo_raw_mid", self.mid_price)
+        drift = (defaults["base_price"] - raw_mid) * 0.012
+        move = random.gauss(drift, 0.16 * step_scale)
+        raw_mid = raw_mid + move
+        self._demo_raw_mid = raw_mid
+        anchor = round(raw_mid / w) * w
 
-        self.best_bid = round(anchor - half_spread, 2)
-        self.best_ask = round(anchor + half_spread, 2)
-        self.ltp = round(random.choice([self.best_bid, self.best_ask, float(anchor)]), 2)
+        half_spread = random.choice([0.3, 0.5, 0.8]) * step_scale
+        self.best_bid = round(raw_mid - half_spread, 2)
+        self.best_ask = round(raw_mid + half_spread, 2)
+        self.ltp = round(raw_mid + random.choice([-0.2, 0.0, 0.2]) * step_scale, 2)
         self.spot_basis = float(defaults.get("demo_basis", 6.5))
-        self.spot_price = round(anchor - self.spot_basis, 2)
+        self.spot_price = round(raw_mid - self.spot_basis, 2)
 
         # Keep demo walls anchored around current price band
-        if not self._demo_walls_buy or (anchor not in self._demo_walls_buy and random.random() < 0.25):
+        if not self._demo_walls_buy or (anchor not in self._demo_walls_buy and random.random() < 0.08):
             self._refresh_demo_walls(anchor)
+
+        # Smoothly evolve resting book quantities per band so bars breathe organically like a real exchange DOM
+        prev_b_map = getattr(self, "_demo_rest_b", {})
+        prev_s_map = getattr(self, "_demo_rest_s", {})
+        new_b_map = {}
+        new_s_map = {}
 
         bids = []
         asks = []
-        # Populate 11 distinct 5-pt bands on each side (leaving natural 1-band spread gap below LTP when realistic)
-        for idx in range(11):
+        for idx in range(12):
             b_band = anchor if idx == 0 else (anchor - (idx + 1) * w)
             s_band = anchor + idx * w
             bp = round(b_band - 0.2, 2) if idx == 0 else float(b_band)
             ap = round(s_band + 0.2, 2) if idx == 0 else float(s_band)
 
             if b_band in self._demo_walls_buy:
-                b_lots = max(6, int(self._demo_walls_buy[b_band] * random.uniform(0.985, 1.015)))
+                target_b = self._demo_walls_buy[b_band]
+                cur_b = prev_b_map.get(b_band, target_b)
+                b_lots = max(8, int(round(cur_b + (target_b - cur_b) * 0.25 + random.randint(-9, 9))))
+                self._demo_walls_buy[b_band] = max(40, target_b + random.randint(-4, 4))
             else:
-                b_lots = random.randint(6, 38)
+                cur_b = prev_b_map.get(b_band, random.randint(10, 36))
+                b_lots = max(6, min(48, cur_b + random.randint(-3, 3)))
+            new_b_map[b_band] = b_lots
 
             if s_band in self._demo_walls_sell:
-                s_lots = max(12, int(self._demo_walls_sell[s_band] * random.uniform(0.985, 1.015)))
+                target_s = self._demo_walls_sell[s_band]
+                cur_s = prev_s_map.get(s_band, target_s)
+                s_lots = max(12, int(round(cur_s + (target_s - cur_s) * 0.25 + random.randint(-6, 6))))
+                self._demo_walls_sell[s_band] = max(45, target_s + random.randint(-3, 3))
             else:
-                s_lots = random.randint(15, 66)
+                cur_s = prev_s_map.get(s_band, random.randint(16, 62))
+                s_lots = max(10, min(68, cur_s + random.randint(-4, 4)))
+            new_s_map[s_band] = s_lots
 
             bids.append((bp, b_lots * lot_sz))
             asks.append((ap, s_lots * lot_sz))
+
+        self._demo_rest_b = new_b_map
+        self._demo_rest_s = new_s_map
 
         self.bids = bids
         self.asks = asks
@@ -863,11 +901,11 @@ class MarketScreenEngine:
         true_mid = round((self.best_bid + self.best_ask) / 2.0, 2)
         self.mid_price = true_mid
 
-        # Simulate realistic aggressive trade + occasional spoof/pull in Demo Mode (without auto-diff noise)
+        # Simulate realistic live aggressive fills & order pulls at 5.5 Hz rhythm
         now_d = time.time()
-        dt_d = min(3.0, max(0.2, now_d - self._last_flow_ts)) if self._last_flow_ts > 0 else 1.0
+        dt_d = min(2.0, max(0.05, now_d - self._last_flow_ts)) if self._last_flow_ts > 0 else 0.18
         self._last_flow_ts = now_d
-        dec_d = math.exp(-dt_d / 18.0)
+        dec_d = math.exp(-dt_d / 16.0)
         for dct in (self._pulled_buy, self._pulled_sell, self._bought_lots, self._sold_lots):
             for k in list(dct.keys()):
                 if dct[k] * dec_d < 0.5:
@@ -877,18 +915,24 @@ class MarketScreenEngine:
 
         bs = max(0.5, float(self.band_size or 5.0))
         c_band = round(true_mid / bs) * bs
-        if random.random() < 0.45:
+        if random.random() < 0.34:
             if random.random() < 0.52:
-                self._bought_lots[round(c_band + bs, 2)] = min(90.0, self._bought_lots.get(round(c_band + bs, 2), 0.0) + random.randint(4, 14))
+                tb = round(c_band + random.choice([0, 1]) * bs, 2)
+                self._bought_lots[tb] = min(120.0, self._bought_lots.get(tb, 0.0) + random.randint(2, 9))
             else:
-                self._sold_lots[round(c_band, 2)] = min(90.0, self._sold_lots.get(round(c_band, 2), 0.0) + random.randint(4, 14))
-        if random.random() < 0.22:
-            if random.random() < 0.5:
-                pb = round(c_band - random.choice([2, 3, 4]) * bs, 2)
-                self._pulled_buy[pb] = min(380.0, self._pulled_buy.get(pb, 20.0) + random.randint(25, 95))
+                tb = round(c_band, 2)
+                self._sold_lots[tb] = min(120.0, self._sold_lots.get(tb, 0.0) + random.randint(2, 9))
+        if random.random() < 0.24:
+            if random.random() < 0.48:
+                pb = round(c_band - random.choice([2, 3, 4, 5]) * bs, 2)
+                self._pulled_buy[pb] = min(420.0, self._pulled_buy.get(pb, 14.0) + random.randint(12, 48))
+                if pb in self._demo_rest_b:
+                    self._demo_rest_b[pb] = max(6, self._demo_rest_b[pb] - random.randint(4, 14))
             else:
-                ps = round(c_band + random.choice([1, 2]) * bs, 2)
-                self._pulled_sell[ps] = min(560.0, self._pulled_sell.get(ps, 30.0) + random.randint(35, 130))
+                ps = round(c_band + random.choice([0, 1, 2]) * bs, 2)
+                self._pulled_sell[ps] = min(580.0, self._pulled_sell.get(ps, 18.0) + random.randint(14, 65))
+                if ps in self._demo_rest_s:
+                    self._demo_rest_s[ps] = max(10, self._demo_rest_s[ps] - random.randint(4, 16))
 
         self._update_candle_locked(true_mid)
         self._update_big_orders_locked()
@@ -988,9 +1032,70 @@ class MarketScreenEngine:
     def _demo_loop(self):
         while self.running:
             time.sleep(BOOK_REFRESH_SECONDS)
+            updated = False
             with self.lock:
                 if self.source == "demo":
                     self._tick_demo_book_locked()
+                    updated = True
+            if updated:
+                self._notify_stream()
+
+    def _update_rolling_l2_locked(self, bids: list[tuple[float, int]], asks: list[tuple[float, int]], ltp: float):
+        """
+        Maintain rolling Level-2 memory outside the immediate 5-level window so as NIFTY
+        oscillates across bands on a 5-level feed, out-of-window resting levels stay populated
+        with genuine observed Upstox depth (instantly cleared if traded through or refreshed).
+        """
+        now = time.time()
+        min_bid = min((p for p, q in bids if p > 0 and q > 0), default=0.0)
+        max_ask = max((p for p, q in asks if p > 0 and q > 0), default=0.0)
+        ref = ltp if ltp > 0 else self.mid_price
+        max_dist = max(40.0, float(self.band_size or 5.0) * 18.0)
+
+        # Clear any cached levels inside current authoritative window or crossed by LTP
+        if min_bid > 0:
+            for p in list(self._l2_bid_mem.keys()):
+                if p >= min_bid or (ltp > 0 and p >= ltp) or (ref > 0 and abs(ref - p) > max_dist) or (now - self._l2_bid_mem[p][1] > 120.0):
+                    self._l2_bid_mem.pop(p, None)
+        if max_ask > 0:
+            for p in list(self._l2_ask_mem.keys()):
+                if p <= max_ask or (ltp > 0 and p <= ltp) or (ref > 0 and abs(ref - p) > max_dist) or (now - self._l2_ask_mem[p][1] > 120.0):
+                    self._l2_ask_mem.pop(p, None)
+
+        for p, q in bids:
+            if p > 0 and q > 0:
+                self._l2_bid_mem[round(p, 2)] = (int(q), now)
+        for p, q in asks:
+            if p > 0 and q > 0:
+                self._l2_ask_mem[round(p, 2)] = (int(q), now)
+
+    def _get_display_book_locked(self) -> tuple[list[tuple[float, int]], list[tuple[float, int]]]:
+        if self.source != "upstox" or self.feed_levels > 5 or (not self._l2_bid_mem and not self._l2_ask_mem):
+            return self.bids, self.asks
+
+        now = time.time()
+        live_b_prices = {round(p, 2) for p, _ in self.bids}
+        live_a_prices = {round(p, 2) for p, _ in self.asks}
+        min_bid = min(live_b_prices, default=0.0)
+        max_ask = max(live_a_prices, default=0.0)
+
+        disp_bids = list(self.bids)
+        for p, (q, ts) in self._l2_bid_mem.items():
+            age = now - ts
+            if p not in live_b_prices and (min_bid == 0.0 or p < min_bid) and age <= 110.0:
+                dec_q = int(round(q * math.exp(-max(0.0, age - 3.0) / 80.0)))
+                if dec_q >= self.lot_size:
+                    disp_bids.append((p, dec_q))
+
+        disp_asks = list(self.asks)
+        for p, (q, ts) in self._l2_ask_mem.items():
+            age = now - ts
+            if p not in live_a_prices and (max_ask == 0.0 or p > max_ask) and age <= 110.0:
+                dec_q = int(round(q * math.exp(-max(0.0, age - 3.0) / 80.0)))
+                if dec_q >= self.lot_size:
+                    disp_asks.append((p, dec_q))
+
+        return disp_bids, disp_asks
 
     # --------------------------------------------------------------------------
     # UPSTOX LIVE INTEGRATION (Analytics Token + Official upstox-python-sdk)
@@ -1228,9 +1333,11 @@ class MarketScreenEngine:
                 if bids and asks:
                     self.mid_price = round((self.best_bid + self.best_ask) / 2.0, 2)
                 if bids or asks:
-                    self.feed_levels = max(len(bids), len(asks), self.feed_levels)
+                    self.feed_levels = max(len(bids), len(asks))
+                    self._update_rolling_l2_locked(self.bids, self.asks, self.ltp)
                     self.last_book_ts = time.time()
                     self._update_big_orders_locked()
+            self._notify_stream()
         except Exception as exc:
             print(f"[Upstox] Initial quote snapshot skipped: {str(exc)[:120]}")
 
@@ -1375,6 +1482,9 @@ class MarketScreenEngine:
         while self._is_session_active(sid):
             closed_event = threading.Event()
             mode = self.depth_mode
+            instant_retry = [False]
+            opened_ts = [0.0]
+            got_depth_quotes = [False]
 
             streamer = upstox_client.MarketDataStreamerV3(client, [fut_key], mode)
             with self.lock:
@@ -1383,6 +1493,7 @@ class MarketScreenEngine:
                 self.streamer = streamer
 
             def on_open():
+                opened_ts[0] = time.time()
                 levels_label = 30 if mode == "full_d30" else 5
                 mkt_note = (
                     "Live market feed streaming."
@@ -1395,6 +1506,7 @@ class MarketScreenEngine:
                         self.token_expired = False
                         self.feed_levels = levels_label
                         self.status_message = f"Upstox WebSocket connected ({levels_label} depth levels, mode='{mode}'). {mkt_note}"
+                self._notify_stream()
                 print(f"[Upstox WS] Connected & subscribed to {fut_key} in '{mode}' ({levels_label} levels) mode.")
 
             def on_message(msg):
@@ -1429,12 +1541,31 @@ class MarketScreenEngine:
                     if ap > 0 and aq > 0:
                         asks.append((ap, aq))
 
+                if bids or asks:
+                    got_depth_quotes[0] = True
+
+                # If account does not include Plus Pack 30-level depth, auto-fallback to 5-level ("full") seamlessly
+                if (
+                    mode == "full_d30"
+                    and not got_depth_quotes[0]
+                    and opened_ts[0] > 0
+                    and (time.time() - opened_ts[0]) > 4.0
+                    and is_market_open_ist()
+                ):
+                    with self.lock:
+                        if self.session_id == sid and not self._d30_auto_fallback_done:
+                            self.depth_mode = "full"
+                            self._d30_auto_fallback_done = True
+                            instant_retry[0] = True
+                            print("[Upstox WS] No 30-level quotes received; switching automatically to 'full' (5-level) mode.")
+                    closed_event.set()
+                    return
+
                 with self.lock:
                     if self.session_id != sid:
                         return
                     prev_mid = self.mid_price or ltp
                     prev_ask = self.best_ask or prev_mid
-                    prev_bid = self.best_bid or prev_mid
 
                     trade_qty = 0.0
                     if vtt > 0:
@@ -1458,6 +1589,9 @@ class MarketScreenEngine:
                     if quotes:
                         self.feed_levels = len(quotes)
 
+                    if bids or asks:
+                        self._update_rolling_l2_locked(self.bids, self.asks, self.ltp)
+
                     if self.bids and self.asks:
                         mid = round((self.best_bid + self.best_ask) / 2.0, 2)
                     else:
@@ -1473,9 +1607,22 @@ class MarketScreenEngine:
                     self.last_book_ts = time.time()
                     self._update_big_orders_locked()
 
+                self._notify_stream()
+
             def on_error(err):
                 err_str = str(err)
                 print(f"[Upstox WS] Error: {err_str[:160]}")
+                # If 30-level mode is not authorized on user's plan, fall back immediately to 5-level ("full")
+                if mode == "full_d30" and not self._d30_auto_fallback_done and ("401" not in err_str):
+                    with self.lock:
+                        if self.session_id == sid:
+                            self.depth_mode = "full"
+                            self._d30_auto_fallback_done = True
+                            instant_retry[0] = True
+                            print("[Upstox WS] 'full_d30' rejected by plan; auto-switching to 'full' (5-level) mode.")
+                    closed_event.set()
+                    return
+
                 if "401" in err_str or "Unauthorized" in err_str or "403" in err_str:
                     with self.lock:
                         if self.session_id == sid:
@@ -1486,9 +1633,16 @@ class MarketScreenEngine:
                                 "Generate a fresh Analytics Token at https://account.upstox.com/developer/apps#analytics, "
                                 "paste it into .env, and click 'Retry Upstox'."
                             )
+                    self._notify_stream()
                 closed_event.set()
 
             def on_close(*_args):
+                if mode == "full_d30" and not got_depth_quotes[0] and not self._d30_auto_fallback_done:
+                    with self.lock:
+                        if self.session_id == sid:
+                            self.depth_mode = "full"
+                            self._d30_auto_fallback_done = True
+                            instant_retry[0] = True
                 closed_event.set()
 
             streamer.on("open", on_open)
@@ -1507,12 +1661,17 @@ class MarketScreenEngine:
             if not self._is_session_active(sid):
                 break
 
+            if instant_retry[0]:
+                time.sleep(0.25)
+                continue
+
             with self.lock:
                 if self.token_expired:
                     # Do not spam reconnects when token is invalid/expired
                     break
                 self.connection_status = "reconnecting"
                 self.status_message = f"Upstox WebSocket dropped. Reconnecting in {RECONNECT_DELAY_SECONDS} seconds..."
+            self._notify_stream()
 
             print(f"[Upstox WS] Disconnected. Reconnecting in {RECONNECT_DELAY_SECONDS}s...")
             for _ in range(RECONNECT_DELAY_SECONDS):
@@ -1537,6 +1696,8 @@ class MarketScreenEngine:
 
             if new_depth_mode in ("full", "full_d30") and new_depth_mode != self.depth_mode:
                 self.depth_mode = new_depth_mode
+                if new_depth_mode == "full_d30":
+                    self._d30_auto_fallback_done = False
                 if new_source == "upstox":
                     restart_upstox = True
 
@@ -1551,6 +1712,8 @@ class MarketScreenEngine:
                 self._stop_streamer_quietly()
                 self.source = new_source if new_source in ("demo", "upstox") else self.source
                 self.symbol = new_symbol if new_symbol in SYMBOL_DEFAULTS else self.symbol
+                if force_reconnect:
+                    self._d30_auto_fallback_done = False
                 self._reset_symbol_state(self.symbol)
                 if self.source == "upstox":
                     restart_upstox = True
@@ -1558,14 +1721,16 @@ class MarketScreenEngine:
         if restart_upstox:
             self._start_upstox_session()
 
+        self._notify_stream()
         return self.get_state_snapshot()
 
     def get_state_snapshot(self) -> dict:
         token_configured = bool(get_upstox_token())
         with self.lock:
+            disp_bids, disp_asks = self._get_display_book_locked()
             ladder = build_grouped_ladder(
-                bids=self.bids,
-                asks=self.asks,
+                bids=disp_bids,
+                asks=disp_asks,
                 band_size=self.band_size,
                 lot_size=self.lot_size,
                 highlight_top_n=HIGHLIGHT_TOP_N,
@@ -1593,8 +1758,11 @@ class MarketScreenEngine:
                 for v in (r["buy_lots"], r["sell_lots"])
                 if v > 0
             ]
-            usual_row = statistics.median(non_zero) if len(non_zero) >= 4 else 35.0
-            big_thresh = max(usual_row * 1.9, 55.0)
+            usual_row = statistics.median(non_zero) if len(non_zero) >= 3 else (max(non_zero) * 0.55 if non_zero else 15.0)
+            min_wall = 7.0 if (self.source == "upstox" and self.feed_levels <= 5) else 35.0
+            big_thresh = max(usual_row * 1.65, min_wall)
+            max_buy_row = max((r["buy_lots"] for r in row_map.values()), default=0.0)
+            max_sell_row = max((r["sell_lots"] for r in row_map.values()), default=0.0)
 
             enriched_rows = []
             for p_k in sorted(row_map.keys(), reverse=True):
@@ -1608,8 +1776,14 @@ class MarketScreenEngine:
                 r["pulled_total"] = pb + ps
                 r["bought_lots"] = bt
                 r["sold_lots"] = sd
-                r["big_buyer"] = bool(r["buy_lots"] >= big_thresh)
-                r["big_seller"] = bool(r["sell_lots"] >= big_thresh)
+                r["big_buyer"] = bool(
+                    r["buy_lots"] >= big_thresh
+                    or (r["buy_lots"] >= max(5.0, usual_row * 1.35) and r["buy_lots"] == max_buy_row and max_buy_row > 0)
+                )
+                r["big_seller"] = bool(
+                    r["sell_lots"] >= big_thresh
+                    or (r["sell_lots"] >= max(5.0, usual_row * 1.35) and r["sell_lots"] == max_sell_row and max_sell_row > 0)
+                )
                 enriched_rows.append(r)
 
             ladder["rows"] = enriched_rows
@@ -1663,7 +1837,7 @@ class MarketScreenEngine:
 
 
 # ==============================================================================
-# HTTP SERVER (Serves index.html + /api/state + /api/control)
+# HTTP SERVER (Serves index.html + /api/stream SSE + /api/state + /api/control)
 # ==============================================================================
 ENGINE = MarketScreenEngine()
 
@@ -1703,6 +1877,34 @@ class ScreenRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _handle_sse_stream(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache, no-transform")
+        self.send_header("Connection", "keep-alive")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+
+        last_seq = -1
+        last_sent = 0.0
+        try:
+            while ENGINE.running:
+                seq = ENGINE.wait_for_tick(last_seq, timeout=0.9)
+                now = time.time()
+                if seq == last_seq and (now - last_sent) < 0.85:
+                    continue
+                # Cap SSE frame rate to ~10 Hz (100ms) for silky-smooth real-time animation
+                wait_rem = 0.10 - (now - last_sent)
+                if wait_rem > 0.005:
+                    time.sleep(wait_rem)
+                last_seq = ENGINE._stream_seq
+                payload = json.dumps(ENGINE.get_state_snapshot())
+                self.wfile.write(f"data: {payload}\n\n".encode("utf-8"))
+                self.wfile.flush()
+                last_sent = time.time()
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
+            return
+
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/healthz":
@@ -1721,6 +1923,21 @@ class ScreenRequestHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(html)))
             self.end_headers()
             self.wfile.write(html)
+        elif parsed.path in ("/apk", "/nifty-orderbook.apk", "/NIFTY-OrderBook.apk"):
+            apk_path = BASE_DIR / "NIFTY-OrderBook.apk"
+            if not apk_path.exists():
+                self.send_error(404, "NIFTY-OrderBook.apk not found")
+                return
+            apk_bytes = apk_path.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/vnd.android.package-archive")
+            self.send_header("Content-Disposition", 'attachment; filename="NIFTY-OrderBook.apk"')
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Content-Length", str(len(apk_bytes)))
+            self.end_headers()
+            self.wfile.write(apk_bytes)
+        elif parsed.path == "/api/stream":
+            self._handle_sse_stream()
         elif parsed.path == "/api/state":
             self._send_json(200, ENGINE.get_state_snapshot())
         else:
@@ -1750,6 +1967,7 @@ def main():
     bind_port = int(env_cfg.get("PORT") or PORT)
 
     server = ThreadingHTTPServer((bind_host, bind_port), ScreenRequestHandler)
+    server.daemon_threads = True
     print("=" * 72)
     print("  PERSONAL NIFTY ORDER BOOK SCREEN")
     print(f"  Open in browser : http://127.0.0.1:{bind_port}")
